@@ -322,6 +322,22 @@ function matchBoard(bn, boardQuotes){
   hit = boardQuotes.find(bq => bq.f14 === bn+'Ⅱ' || bq.f14 === bn+'Ⅲ');
   return hit || null;
 }
+
+// 股东增减持明细（含变动均价 TRADE_AVERAGE_PRICE，用于估算平均成本）
+async function fetchHolderChange(code){
+  const url = 'https://datacenter-web.eastmoney.com/api/data/v1/get?sortColumns=END_DATE,SECURITY_CODE&sortTypes=-1,-1&pageSize=50&pageNumber=1&reportName=RPT_SHARE_HOLDER_INCREASE&columns=ALL&source=WEB&client=WEB&filter=(SECURITY_CODE%3D%22'+code+'%22)';
+  const r = await fetch(url, {referrerPolicy:'no-referrer'});
+  const d = await r.json();
+  return (d.result && d.result.data) || [];
+}
+
+// 板块成分股（f23=每只PB，用于算行业PB均值）
+async function fetchBoardComponents(bkCode){
+  const url = 'https://push2delay.eastmoney.com/api/qt/clist/get?pn=1&pz=100&po=1&np=1&fltt=2&invt=2&fid=f3&fs=b:'+bkCode+'&fields=f2,f9,f12,f14,f23';
+  const r = await fetch(url);
+  const d = await r.json();
+  return (d.data && d.data.diff) || [];
+}
 function isYearEnd(d){ return (d||'').slice(5,10)==='12-31'; }
 function yearReports(fin){
   // 取历年报（12-31），按年份去重
@@ -610,17 +626,23 @@ function renderValuation(data){
     if(hit){ indPe=hit.f9; indName=hit.f14; break; }
   }
   const peVsInd = (q.pe!=null && indPe!=null) ? (q.pe/indPe-1)*100 : null;
+  // 行业PB：成分股 f23 均值
+  const pbs = (data.boardComponents||[]).map(x=>x.f23).filter(v=>typeof v==='number' && v>0);
+  const indPb = pbs.length ? pbs.reduce((a,b)=>a+b,0)/pbs.length : null;
+  const pbVsInd = (q.pb!=null && indPb!=null) ? (q.pb/indPb-1)*100 : null;
   $('valuation').innerHTML = `
     <div class="q-meta">
       ${q.pe!=null?`<div>PE(动) <b>${fmtNum(q.pe)}</b></div>`:''}
       ${q.pb!=null?`<div>PB <b>${fmtNum(q.pb)}</b></div>`:''}
       ${indPe!=null?`<div>行业PE <b>${fmtNum(indPe)}</b>（${indName}）</div>`:''}
+      ${indPb!=null?`<div>行业PB <b>${fmtNum(indPb)}</b>（${pbs.length}只均值）</div>`:''}
       <div>净利增速 <b>${pct(npg)}</b></div>
       ${peg!=null?`<div>PEG <b>${fmtNum(peg)}</b></div>`:''}
     </div>
     <div class="note">
-      ${peVsInd!=null?`个股PE vs 行业PE：<b>${peVsInd>0?'高 '+fmtNum(peVsInd,0)+'%':'低 '+fmtNum(Math.abs(peVsInd),0)+'%'}</b>（${peVsInd>0?'相对高估':'相对低估'}）。`:''}
-      ${peg!=null&&peg>2?'<span style="color:#f85149">PEG>2 提示估值偏高。</span>':'行业PB均值暂缺数据源。'}
+      ${peVsInd!=null?`PE vs 行业：<b>${peVsInd>0?'高 '+fmtNum(peVsInd,0)+'%':'低 '+fmtNum(Math.abs(peVsInd),0)+'%'}</b>。`:''}
+      ${pbVsInd!=null?`PB vs 行业：<b>${pbVsInd>0?'高 '+fmtNum(pbVsInd,0)+'%':'低 '+fmtNum(Math.abs(pbVsInd),0)+'%'}</b>。`:''}
+      ${peg!=null&&peg>2?'<span style="color:#f85149">PEG>2 提示估值偏高。</span>':''}
     </div>`;
 }
 
@@ -633,6 +655,15 @@ function renderHolders(data){
   const endDate = (latestDate||'').slice(0,10);
   const prevMap = {};
   all.filter(h=>h.END_DATE===prevDate).forEach(h=>{ prevMap[h.HOLDER_NAME]=h.HOLD_NUM; });
+  // 平均成本（估算）：股东增持记录加权均价
+  const costMap = {};
+  (data.holderChange||[]).forEach(hc=>{
+    if(hc.HOLDER_NAME && hc.DIRECTION==='增持' && hc.TRADE_AVERAGE_PRICE && hc.CHANGE_NUM>0){
+      if(!costMap[hc.HOLDER_NAME]) costMap[hc.HOLDER_NAME] = {amt:0, num:0};
+      costMap[hc.HOLDER_NAME].amt += hc.TRADE_AVERAGE_PRICE * hc.CHANGE_NUM;
+      costMap[hc.HOLDER_NAME].num += hc.CHANGE_NUM;
+    }
+  });
   const rows = hs.map(h=>{
     const name = h.HOLDER_NAME||'—';
     const num = h.HOLD_NUM!=null? fmtYi(h.HOLD_NUM)+'股' : '—';
@@ -642,12 +673,15 @@ function renderHolders(data){
       const diff = (h.HOLD_NUM/prevMap[name]-1)*100;
       change = (diff>0?'+':'')+diff.toFixed(1)+'%';
     }
-    return `<tr><td>${name}</td><td class="num">${num}</td><td class="num">${ratio}</td><td class="num">${change}</td></tr>`;
+    let cost = '—';
+    const c = costMap[name];
+    if(c && c.num>0) cost = '¥'+(c.amt/c.num).toFixed(2);
+    return `<tr><td>${name}</td><td class="num">${num}</td><td class="num">${ratio}</td><td class="num">${change}</td><td class="num">${cost}</td></tr>`;
   }).join('');
   $('holders').innerHTML = `
     <div class="chart-title">截至 ${endDate} 十大流通股东（环比 ${prevDate?(prevDate||'').slice(0,10):'—'}）</div>
-    <table><thead><tr><th>股东名称</th><th>持股数</th><th>占流通比</th><th>环比增减</th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="note">增减持=本期 vs 上期持股数环比。平均成本估算需历史成交数据，暂以增减持呈现。</div>`;
+    <table><thead><tr><th>股东名称</th><th>持股数</th><th>占流通比</th><th>环比增减</th><th>平均成本(估)</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="note">平均成本=增持记录变动均价加权估算（纯减持/无记录显示—）。增减持=本期 vs 上期持股数环比。</div>`;
 }
 
 function renderAnnouncements(data){
@@ -857,11 +891,22 @@ async function loadStock(code){
       fetchQuote(code), fetchKlines(code), fetchFinance(secuCode), fetchBalance(secuCode),
       fetchCashflow(secuCode), fetchHolders(secuCode), fetchBoards(secuCode), fetchHolderNum(secuCode)
     ]);
-    let anns = [], pledge = [], boardQuotes = [];
+    let anns = [], pledge = [], boardQuotes = [], holderChange = [], boardComponents = [];
     try { anns = await fetchAnnouncements(code); } catch(e) {}
     try { pledge = await fetchPledge(code); } catch(e) {}
     try { boardQuotes = await fetchBoardQuotes(); } catch(e) {}
-    const data = {quote, klines, fin, bal, cf, holders, boards, hn, anns, pledge, boardQuotes};
+    try { holderChange = await fetchHolderChange(code); } catch(e) {}
+    // 行业成分股：精确板块匹配 BK 代码后拉成分股（算行业PB均值）
+    try {
+      if(boardQuotes.length){
+        const precise = boards.filter(b=>b.IS_PRECISE==='1');
+        for(const b of precise){
+          const hit = matchBoard(b.BOARD_NAME, boardQuotes);
+          if(hit && hit.f12){ boardComponents = await fetchBoardComponents(hit.f12); break; }
+        }
+      }
+    } catch(e) {}
+    const data = {quote, klines, fin, bal, cf, holders, boards, hn, anns, pledge, boardQuotes, holderChange, boardComponents};
     renderQuote(data);
     renderVerdict(data);
     renderChecklist(data);
