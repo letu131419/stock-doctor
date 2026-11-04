@@ -314,7 +314,14 @@ async function fetchBoardQuotes(){
   return all;
 }
 
-/* ============ 十问判定逻辑 ============ */
+// 个股精确板块名 → 板块行情匹配（精确优先，其次申万Ⅱ/Ⅲ级后缀）
+function matchBoard(bn, boardQuotes){
+  if(!bn || !boardQuotes) return null;
+  let hit = boardQuotes.find(bq => bq.f14 === bn);
+  if(hit) return hit;
+  hit = boardQuotes.find(bq => bq.f14 === bn+'Ⅱ' || bq.f14 === bn+'Ⅲ');
+  return hit || null;
+}
 function isYearEnd(d){ return (d||'').slice(5,10)==='12-31'; }
 function yearReports(fin){
   // 取历年报（12-31），按年份去重
@@ -569,7 +576,7 @@ function renderBoards(data){
   // 景气度：精确板块匹配板块行情（当日涨跌幅 + 主力净流入）
   const matched = [];
   for(const b of precise){
-    const hit = (data.boardQuotes||[]).find(bq => bq.f14 && (bq.f14===b.BOARD_NAME || bq.f14.includes(b.BOARD_NAME) || b.BOARD_NAME.includes(bq.f14)));
+    const hit = matchBoard(b.BOARD_NAME, data.boardQuotes);
     if(hit) matched.push({name:b.BOARD_NAME, chg:hit.f3, inflow:hit.f62});
   }
   let boom = '';
@@ -599,7 +606,7 @@ function renderValuation(data){
   const preciseBoards = (data.boards||[]).filter(b=>b.IS_PRECISE==='1').map(b=>b.BOARD_NAME);
   let indPe=null, indName=null;
   for(const bn of preciseBoards){
-    const hit = (data.boardQuotes||[]).find(bq => bq.f14 && bq.f9!=null && (bq.f14===bn || bq.f14.includes(bn) || bn.includes(bq.f14)));
+    const hit = matchBoard(bn, data.boardQuotes);
     if(hit){ indPe=hit.f9; indName=hit.f14; break; }
   }
   const peVsInd = (q.pe!=null && indPe!=null) ? (q.pe/indPe-1)*100 : null;
