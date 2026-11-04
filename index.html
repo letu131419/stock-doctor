@@ -298,12 +298,20 @@ async function fetchPledge(code){
   return (d.result && d.result.data) || [];
 }
 
-// 行业板块行情（赛道景气度 + 行业PE）
+// 行业板块行情（赛道景气度 + 行业PE）——分页拉全（pz上限100）
 async function fetchBoardQuotes(){
-  const url = 'https://push2delay.eastmoney.com/api/qt/clist/get?pn=1&pz=500&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:90+t:2&fields=f3,f9,f12,f14,f62';
-  const r = await fetch(url);
-  const d = await r.json();
-  return (d.data && d.data.diff) || [];
+  const base = 'https://push2delay.eastmoney.com/api/qt/clist/get?po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:90+t:2&fields=f3,f9,f12,f14,f62&pz=100&pn=';
+  const first = await (await fetch(base+'1')).json();
+  const total = (first.data && first.data.total) || 0;
+  const pages = Math.ceil(total/100);
+  let all = (first.data && first.data.diff) || [];
+  if(pages>1){
+    const rest = [];
+    for(let p=2;p<=pages;p++) rest.push(fetch(base+p).then(r=>r.json()));
+    const rs = await Promise.all(rest);
+    rs.forEach(d=>{ all = all.concat((d.data&&d.data.diff)||[]); });
+  }
+  return all;
 }
 
 /* ============ 十问判定逻辑 ============ */
