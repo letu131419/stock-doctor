@@ -436,8 +436,17 @@ function runChecklist(data){
     if(q&&q.pe!=null&&!isNaN(q.pe)){
       const npg = yrs.length>=2 ? (yrs[yrs.length-1].PARENTNETPROFITTZ||0) : 0;
       const peg = npg>0 ? q.pe/npg : null;
+      // 行业PE：个股精确板块名匹配板块行情 f9（与估值对比模块同口径）
+      let indPe = null;
+      const preciseBoards = (data.boards||[]).filter(b=>b.IS_PRECISE==='1').map(b=>b.BOARD_NAME);
+      for(const bn of preciseBoards){
+        const hit = matchBoard(bn, data.boardQuotes);
+        if(hit && hit.f9!=null){ indPe = hit.f9; break; }
+      }
       basis = `PE ${fmtNum(q.pe,1)}，净利增速 ${pct(npg)}` + (peg!=null?`，PEG ${fmtNum(peg,2)}`:'');
-      ok = !(q.pe>60 && peg!=null && peg>2);
+      const overInd = indPe!=null ? q.pe > indPe*2 : q.pe > 60; // 缺行业数据时回退绝对阈值
+      const overPeg = peg!=null && peg>2;
+      ok = !(overInd && overPeg);
     } else basis='PE数据不足';
     checks.push({q:6,title:'估值水平',ok,basis,desc:'PE>行业2倍且PEG>2'});
   }
@@ -471,7 +480,7 @@ function runChecklist(data){
     const hits = data.anns.filter(a=>kw.some(k=>a.title&&a.title.includes(k)));
     let basis='', ok=null;
     if(hits.length>0){ basis='公告命中风险词：'+hits.slice(0,3).map(h=>h.title).join('；'); ok=false; }
-    else basis='近期公告未见明显政策风险词，需持续关注';
+    else { basis='近期公告未见明显政策风险词，需持续关注'; ok=true; }
     checks.push({q:9,title:'政策风险',ok,basis,desc:'监管点名/集采/反垄断/退市风险'});
   }
   // 10 交易纪律
