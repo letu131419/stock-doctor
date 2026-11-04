@@ -82,6 +82,28 @@ td.num{text-align:right;font-variant-numeric:tabular-nums}
 canvas{width:100%;height:auto;background:var(--card2);border-radius:6px}
 .chart-title{font-size:13px;color:var(--dim);margin-bottom:8px}
 .note{font-size:12px;color:var(--dim);font-style:italic;margin-top:8px}
+/* ============ 移动端适配 ============ */
+@media (max-width:640px){
+  body{padding:10px}
+  h1{font-size:18px}
+  .sub{font-size:12px}
+  .toolbar{flex-direction:column;align-items:stretch}
+  .toolbar input[type=text],.toolbar select,.toolbar button{width:100%}
+  .tabs .tab{padding:8px 12px;font-size:13px}
+  .card{padding:12px;overflow-x:auto}
+  .card h2{font-size:14px}
+  .quote-head{gap:12px;align-items:baseline}
+  .q-name{font-size:18px}
+  .q-price{font-size:22px}
+  .q-meta{gap:10px 14px;font-size:12px}
+  .q-title{font-size:13px}
+  .q-basis{font-size:11px}
+  table{font-size:11px;min-width:500px}
+  th,td{padding:5px 6px}
+  .verdict{font-size:16px}
+  .board-tag{font-size:11px;padding:3px 10px}
+  .note{font-size:11px}
+}
 /* 预启动 */
 .pool-table td{font-size:13px}
 .pool-table .code{cursor:pointer;color:var(--blue)}
