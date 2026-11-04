@@ -283,7 +283,8 @@ async function fetchHolderNum(secuCode){
 // 公告
 async function fetchAnnouncements(code){
   const url = 'https://np-anotice-stock.eastmoney.com/api/security/ann?sr=-1&page_size=20&page_index=1&ann_type=A&client_source=web&stock_list='+code;
-  const r = await fetch(url);
+  // referrerPolicy:no-referrer —— 该接口有 Referer 防盗链，带 Referer 会跨域失败
+  const r = await fetch(url, {referrerPolicy:'no-referrer'});
   const d = await r.json();
   const list = (d.data && d.data.list) || [];
   return list.map(a => ({title:a.title, date:(a.notice_date||'').slice(0,10), type:(a.columns&&a.columns[0]&&a.columns[0].column_name)||''}));
@@ -774,10 +775,12 @@ async function loadStock(code){
   hideErr();
   try{
     const secuCode = toSecuCode(code);
-    const [quote, klines, fin, bal, cf, holders, boards, hn, anns] = await Promise.all([
+    const [quote, klines, fin, bal, cf, holders, boards, hn] = await Promise.all([
       fetchQuote(code), fetchKlines(code), fetchFinance(secuCode), fetchBalance(secuCode),
-      fetchCashflow(secuCode), fetchHolders(secuCode), fetchBoards(secuCode), fetchHolderNum(secuCode), fetchAnnouncements(code)
+      fetchCashflow(secuCode), fetchHolders(secuCode), fetchBoards(secuCode), fetchHolderNum(secuCode)
     ]);
+    let anns = [];
+    try { anns = await fetchAnnouncements(code); } catch(e) { anns = []; }
     const data = {quote, klines, fin, bal, cf, holders, boards, hn, anns};
     renderQuote(data);
     renderVerdict(data);
