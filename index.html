@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A股诊断台 · 十问投资检查</title>
+<style>
+:root{
+  --bg:#0e1117; --card:#161b22; --card2:#1c2128; --border:#2d333b;
+  --txt:#e6edf3; --dim:#8b949e; --green:#3fb950; --red:#f85149; --yellow:#d29922; --blue:#58a6ff;
+  --good:#1f6feb; --bad:#da3633; --warn:#9e6a03;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:16px;max-width:1080px;margin:0 auto;line-height:1.5}
+h1{font-size:20px;margin-bottom:4px}
+.sub{color:var(--dim);font-size:13px;margin-bottom:14px}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+input[type=text]{flex:1;min-width:180px;background:var(--card2);border:1px solid var(--border);color:var(--txt);padding:9px 12px;border-radius:6px;font-size:15px}
+input[type=text]:focus{outline:none;border-color:var(--blue)}
+button{background:#1f6feb;color:#fff;border:none;padding:9px 16px;border-radius:6px;font-size:14px;cursor:pointer;font-weight:600}
+button:hover{background:#1a5fd0}
+button.sec{background:var(--card2);color:var(--txt);border:1px solid var(--border)}
+select{background:var(--card2);border:1px solid var(--border);color:var(--txt);padding:9px 10px;border-radius:6px;font-size:14px}
+.tabs{display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid var(--border)}
+.tab{padding:9px 18px;cursor:pointer;color:var(--dim);font-size:14px;border-bottom:2px solid transparent}
+.tab.active{color:var(--txt);border-bottom-color:var(--blue);font-weight:600}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px}
+.card h2{font-size:15px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card h2 .ic{font-size:16px}
+.grid{display:grid;gap:10px}
+.loading{color:var(--dim);text-align:center;padding:30px;font-size:14px}
+.hidden{display:none}
+.err{color:var(--red);background:#2d1517;border:1px solid #5c1d1f;border-radius:6px;padding:12px;font-size:13px;margin-bottom:14px}
+/* 行情头部 */
+.quote-head{display:flex;flex-wrap:wrap;gap:20px;align-items:baseline}
+.q-name{font-size:22px;font-weight:700}
+.q-code{color:var(--dim);font-size:14px}
+.q-price{font-size:26px;font-weight:700}
+.q-chg{font-size:15px;font-weight:600}
+.up{color:var(--red)}.down{color:var(--green)}
+.q-meta{display:flex;gap:18px;flex-wrap:wrap;color:var(--dim);font-size:13px}
+.q-meta b{color:var(--txt);font-weight:600}
+/* 异动标记 */
+.anomaly{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.tag{font-size:12px;padding:3px 10px;border-radius:12px;border:1px solid var(--border);color:var(--dim)}
+.tag.hit{color:#fff;border-color:transparent;font-weight:600}
+.tag.up-hit{background:var(--bad)}.tag.down-hit{background:var(--good)}.tag.warn-hit{background:var(--yellow)}
+/* 判定 */
+.verdict{font-size:18px;font-weight:700;padding:14px 18px;border-radius:8px;text-align:center}
+.verdict.buy{background:#0d2a1a;color:#3fb950;border:1px solid #1f5c33}
+.verdict.watch{background:#2a200d;color:#d29922;border:1px solid #5c4a1f}
+.verdict.avoid{background:#2d1517;color:#f85149;border:1px solid #5c1d1f}
+.verdict .reason{font-size:13px;font-weight:400;color:var(--dim);margin-top:6px}
+/* 表格 */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:7px 8px;text-align:left;border-bottom:1px solid var(--border)}
+th{color:var(--dim);font-weight:600;font-size:12px}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+/* 十问 */
+.q-item{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);align-items:flex-start}
+.q-item:last-child{border-bottom:none}
+.q-mark{flex-shrink:0;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
+.q-mark.pass{background:#0d2a1a;color:#3fb950}.q-mark.fail{background:#2d1517;color:#f85149}.q-mark.warn{background:#2a200d;color:#d29922}
+.q-body{flex:1}
+.q-title{font-weight:600;font-size:14px}
+.q-basis{color:var(--dim);font-size:12px;margin-top:2px}
+/* 红旗 */
+.flag{padding:8px 12px;border-radius:6px;margin-bottom:6px;font-size:13px}
+.flag.bad{background:#2d1517;border:1px solid #5c1d1f}
+.flag.good{background:#0d2a1a;border:1px solid #1f5c33}
+.flag .lbl{font-weight:600}
+/* 赛道 */
+.board-tags{display:flex;flex-wrap:wrap;gap:6px}
+.board-tag{font-size:12px;padding:4px 12px;border-radius:14px;background:var(--card2);border:1px solid var(--border)}
+.board-tag.precise{border-color:var(--blue);color:var(--blue)}
+/* 公告 */
+.ann-item{padding:7px 0;border-bottom:1px solid var(--border);font-size:13px}
+.ann-item:last-child{border-bottom:none}
+.ann-title{color:var(--txt)}
+.ann-date{color:var(--dim);font-size:12px}
+/* 图表 */
+canvas{width:100%;height:auto;background:var(--card2);border-radius:6px}
+.chart-title{font-size:13px;color:var(--dim);margin-bottom:8px}
+.note{font-size:12px;color:var(--dim);font-style:italic;margin-top:8px}
+/* 预启动 */
+.pool-table td{font-size:13px}
+.pool-table .code{cursor:pointer;color:var(--blue)}
+.pool-table .code:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+
+<h1>📊 A股诊断台</h1>
+<div class="sub">十问投资检查 · 财务造假红旗 · 赛道判断 · 预启动筛选（数据实时拉取 · 仅作研究参考，非投资建议）</div>
+
+<div class="toolbar">
+  <input type="text" id="codeInput" placeholder="输入 6 位股票代码，如 600519" maxlength="6" inputmode="numeric">
+  <button onclick="queryStock()">诊断</button>
+  <select id="hotSelect" onchange="pickHot(this.value)">
+    <option value="">热门股快选</option>
+    <option value="600519">贵州茅台</option>
+    <option value="300750">宁德时代</option>
+    <option value="002594">比亚迪</option>
+    <option value="601318">中国平安</option>
+    <option value="000858">五粮液</option>
+    <option value="600036">招商银行</option>
+    <option value="002415">海康威视</option>
+    <option value="601899">紫金矿业</option>
+    <option value="600186">莲花控股</option>
+    <option value="000001">平安银行</option>
+  </select>
+  <button class="sec" onclick="refresh()">刷新</button>
+</div>
+
+<div class="tabs">
+  <div class="tab active" id="tabDiag" onclick="switchTab('diag')">单股诊断</div>
+  <div class="tab" id="tabPool" onclick="switchTab('pool')">预启动筛选</div>
+</div>
+
+<div id="errBox" class="err hidden"></div>
+
+<!-- ============ 单股诊断 ============ -->
+<div id="diagView">
+  <div id="diagLoading" class="loading hidden">加载中…</div>
+  <div id="diagContent" class="hidden">
+    <div class="card" id="quoteCard"></div>
+    <div class="card" id="verdictCard"></div>
+    <div class="card">
+      <h2><span class="ic">📋</span> 十问投资检查</h2>
+      <div id="checklist"></div>
+    </div>
+    <div class="card">
+      <h2><span class="ic">🚩</span> 财务健康度 / 造假红旗</h2>
+      <div id="flags"></div>
+    </div>
+    <div class="card">
+      <h2><span class="ic">🧭</span> 赛道判断</h2>
+      <div id="boards"></div>
+    </div>
+    <div class="card">
+      <h2><span class="ic">⚖️</span> 估值对比</h2>
+      <div id="valuation"></div>
+    </div>
+    <div class="card">
+      <h2><span class="ic">👥</span> 十大流通股东</h2>
+      <div id="holders"></div>
+    </div>
+    <div class="card">
+      <h2><span class="ic">📈</span> K 线走势图（近 90 交易日）</h2>
+      <canvas id="klineCanvas"></canvas>
+    </div>
+    <div class="card">
+      <h2><span class="ic">💹</span> 近 5 年业绩曲线</h2>
+      <canvas id="perfCanvas"></canvas>
+      <div class="note">注：取历年报（12-31）营收与归母净利润</div>
+    </div>
+    <div class="card">
+      <h2><span class="ic">📰</span> 公告异动</h2>
+      <div id="announcements"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 预启动筛选 ============ -->
+<div id="poolView" class="hidden">
+  <div class="card">
+    <h2><span class="ic">🚀</span> 预启动候选池</h2>
+    <div class="sub">标准：横盘后放量（量比≥2）+ 当日涨幅 3%~5% + 突破均线压制。仅交易时段有效。</div>
+    <button onclick="scanPreLaunch()">开始扫描全市场</button>
+    <div id="poolStatus" class="loading hidden"></div>
+    <div id="poolResult"></div>
+  </div>
+</div>
+
+<script>
+/* ============ 工具函数 ============ */
+const $ = id => document.getElementById(id);
+const fmtNum = (n, d=2) => (n==null||isNaN(n)) ? '—' : Number(n).toLocaleString('zh-CN',{maximumFractionDigits:d,minimumFractionDigits:d});
+const fmtYi = (n) => n==null ? '—' : (Math.abs(n)>=1e8 ? (n/1e8).toFixed(2)+'亿' : (Math.abs(n)>=1e4 ? (n/1e4).toFixed(2)+'万' : n.toFixed(2)));
+const pct = (n) => n==null||isNaN(n) ? '—' : (n>0?'+':'')+Number(n).toFixed(2)+'%';
+
+/* 代码前缀转换 */
+function toTicker(code){
+  code = String(code).trim();
+  if(code[0]==='6'||code[0]==='9') return 'sh'+code;
+  if(code[0]==='0'||code[0]==='3') return 'sz'+code;
+  if(code[0]==='4'||code[0]==='8') return 'bj'+code;
+  return 'sh'+code;
+}
+function toSecuCode(code){
+  code = String(code).trim();
+  if(code[0]==='6'||code[0]==='9') return code+'.SH';
+  if(code[0]==='0'||code[0]==='3') return code+'.SZ';
+  if(code[0]==='4'||code[0]==='8') return code+'.BJ';
+  return code+'.SH';
+}
+function isValidCode(code){
+  code = String(code).trim();
+  return /^\d{6}$/.test(code);
+}
+
+/* ============ 数据层 ============ */
+async function fetchGBK(url){
+  const r = await fetch(url);
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const buf = await r.arrayBuffer();
+  return new TextDecoder('gbk').decode(buf);
+}
+
+// 腾讯实时行情
+async function fetchQuote(code){
+  const ticker = toTicker(code);
+  const raw = await fetchGBK('https://qt.gtimg.cn/q='+ticker);
+  const m = raw.match(/="([^"]*)"/);
+  if(!m) throw new Error('行情返回为空');
+  const p = m[1].split('~');
+  return {
+    name: p[1], code: p[2], price: parseFloat(p[3]), prevClose: parseFloat(p[4]), open: parseFloat(p[5]),
+    chgPct: parseFloat(p[32]), vol: parseFloat(p[36]), amount: parseFloat(p[37]),
+    turnover: parseFloat(p[38]), pe: parseFloat(p[39]), floatMv: parseFloat(p[44]), totalMv: parseFloat(p[45]), pb: parseFloat(p[46])
+  };
+}
+
+// 腾讯 K 线（日K，前复权）
+async function fetchKlines(code){
+  const ticker = toTicker(code);
+  const url = 'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param='+ticker+',day,,,100,qfq';
+  const r = await fetch(url);
+  const d = await r.json();
+  const node = d.data && d.data[ticker];
+  const klines = (node && (node.qfqday || node.day)) || [];
+  return klines.map(k => ({date:k[0], open:parseFloat(k[1]), high:parseFloat(k[2]), low:parseFloat(k[3]), close:parseFloat(k[4]), vol:parseFloat(k[5])}));
+}
+
+// 东财 datacenter 通用（sortColumn 传空则不排序，因不同报告排序字段不同）
+async function fetchEmData(reportName, columns, filter, pageSize=20, sortColumn='REPORT_DATE'){
+  let url = 'https://datacenter.eastmoney.com/securities/api/data/v1/get?reportName='+reportName
+    +'&columns='+columns+'&filter='+encodeURIComponent(filter)
+    +'&pageNumber=1&pageSize='+pageSize+'&source=WEB&client=WEB';
+  if(sortColumn) url += '&sortTypes=-1&sortColumns='+sortColumn;
+  const r = await fetch(url);
+  const d = await r.json();
+  if(!d.success || !d.result) return [];
+  return d.result.data || [];
+}
+
+// 主要财务指标
+async function fetchFinance(secuCode){
+  return fetchEmData('RPT_F10_FINANCE_MAINFINADATA',
+    'SECUCODE,REPORT_DATE,EPSJB,ROEJQ,XSMLL,KCFJCXSYJLR,BPS,TOTALOPERATEREVE,TOTALOPERATEREVETZ,PARENTNETPROFIT,PARENTNETPROFITTZ',
+    '(SECUCODE="'+secuCode+'")', 40);
+}
+// 资产负债表
+async function fetchBalance(secuCode){
+  return fetchEmData('RPT_F10_FINANCE_GBALANCE',
+    'SECUCODE,REPORT_DATE,INVENTORY,ACCOUNTS_RECE,TOTAL_ASSETS,TOTAL_LIABILITIES',
+    '(SECUCODE="'+secuCode+'")', 20);
+}
+// 现金流量表
+async function fetchCashflow(secuCode){
+  return fetchEmData('RPT_F10_FINANCE_GCASHFLOW',
+    'SECUCODE,REPORT_DATE,NETCASH_OPERATE,NETCASH_INVEST,NETCASH_FINANCE',
+    '(SECUCODE="'+secuCode+'")', 20);
+}
+// 十大流通股东
+async function fetchHolders(secuCode){
+  return fetchEmData('RPT_F10_EH_FREEHOLDERS',
+    'SECUCODE,END_DATE,HOLDER_NAME,HOLD_NUM,FREE_HOLDNUM_RATIO,HOLDER_RANK',
+    '(SECUCODE="'+secuCode+'")', 20, 'END_DATE');
+}
+// 概念板块
+async function fetchBoards(secuCode){
+  return fetchEmData('RPT_F10_CORETHEME_BOARDTYPE',
+    'SECUCODE,BOARD_NAME,BOARD_RANK,IS_PRECISE',
+    '(SECUCODE="'+secuCode+'")', 20, '');
+}
+// 股东人数
+async function fetchHolderNum(secuCode){
+  return fetchEmData('RPT_HOLDERNUM_DET',
+    'SECUCODE,END_DATE,HOLDER_NUM,HOLDER_NUM_RATIO',
+    '(SECUCODE="'+secuCode+'")', 8, 'END_DATE');
+}
+// 公告
+async function fetchAnnouncements(code){
+  const url = 'https://np-anotice-stock.eastmoney.com/api/security/ann?sr=-1&page_size=20&page_index=1&ann_type=A&client_source=web&stock_list='+code;
+  const r = await fetch(url);
+  const d = await r.json();
+  const list = (d.data && d.data.list) || [];
+  return list.map(a => ({title:a.title, date:(a.notice_date||'').slice(0,10), type:(a.columns&&a.columns[0]&&a.columns[0].column_name)||''}));
+}
+
+/* ============ 十问判定逻辑 ============ */
+function isYearEnd(d){ return (d||'').slice(5,10)==='12-31'; }
+function yearReports(fin){
+  // 取历年报（12-31），按年份去重
+  const m = {};
+  fin.forEach(f => { const y = (f.REPORT_DATE||'').slice(0,4); if(f.REPORT_DATE&&isYearEnd(f.REPORT_DATE)&&!m[y]) m[y]=f; });
+  return Object.values(m).sort((a,b)=>a.REPORT_DATE<b.REPORT_DATE?-1:1);
+}
+function lastN(arr, n){ return arr.slice(-n); }
+
+function runChecklist(data){
+  const {fin, bal, cf, hn} = data;
+  const yrs = yearReports(fin);
+  const checks = [];
+  // 1 价值创造：营收连续2年下滑
+  {
+    const last2 = lastN(yrs,2);
+    let basis='', ok=null;
+    if(last2.length>=2){
+      const rev1=last2[0].TOTALOPERATEREVETZ, rev2=last2[1].TOTALOPERATEREVETZ;
+      if(rev1!=null&&rev2!=null){ basis=`营收同比 ${pct(rev1)} → ${pct(rev2)}`; ok=!(rev1<0&&rev2<0); }
+      else basis='营收同比数据不足';
+    } else basis='年度财报不足2年';
+    checks.push({q:1,title:'价值创造',ok,basis,desc:'主营业务收入连续2年下滑'});
+  }
+  // 2 护城河：ROE连续3年<8%
+  {
+    const last3 = lastN(yrs,3);
+    let basis='', ok=null;
+    if(last3.length>=3){
+      const roes = last3.map(f=>f.ROEJQ);
+      basis = '近3年 ROE ' + roes.map(r=>fmtNum(r,1)+'%').join(' / ');
+      ok = !(roes.every(r=>r!=null&&r<8));
+    } else basis='年度财报不足3年';
+    checks.push({q:2,title:'护城河',ok,basis,desc:'ROE连续3年<8%'});
+  }
+  // 3 增长质量：应收/营收>50%
+  {
+    const lastFin = fin[0], lastBal = bal[0];
+    let basis='', ok=null;
+    if(lastFin&&lastBal&&lastFin.TOTALOPERATEREVE&&lastBal.ACCOUNTS_RECE!=null){
+      const ratio = lastBal.ACCOUNTS_RECE/lastFin.TOTALOPERATEREVE*100;
+      basis = `应收账款/营收 = ${fmtNum(ratio,1)}%`;
+      ok = ratio < 50;
+    } else basis='应收/营收数据不足';
+    checks.push({q:3,title:'增长质量',ok,basis,desc:'营收增长全靠应收账款(应收/营收>50%)'});
+  }
+  // 4 利润真实性：经营现金流连续2年为负
+  {
+    const cfYrs = cf.filter(c=>c.REPORT_DATE&&isYearEnd(c.REPORT_DATE)).sort((a,b)=>a.REPORT_DATE<b.REPORT_DATE?-1:1);
+    const last2 = lastN(cfYrs,2);
+    let basis='', ok=null;
+    if(last2.length>=2){
+      const ocf = last2.map(c=>c.NETCASH_OPERATE);
+      basis = '近2年经营现金流 ' + ocf.map(v=>fmtYi(v)).join(' / ');
+      ok = !(ocf.every(v=>v!=null&&v<0));
+    } else basis='现金流年度数据不足';
+    checks.push({q:4,title:'利润真实性',ok,basis,desc:'经营现金流连续2年为负'});
+  }
+  // 5 治理结构：质押/关联交易（质押数据源待接入）
+  checks.push({q:5,title:'治理结构',ok:null,basis:'大股东质押率需人工核查（质押数据源未接入）',desc:'质押>60% / 关联交易>30% / 实控人被调查'});
+  // 6 估值水平：PE>行业2倍 且 PEG>2
+  {
+    const q = data.quote;
+    let basis='', ok=null;
+    if(q&&q.pe!=null&&!isNaN(q.pe)){
+      const npg = yrs.length>=2 ? (yrs[yrs.length-1].PARENTNETPROFITTZ||0) : 0;
+      const peg = npg>0 ? q.pe/npg : null;
+      basis = `PE ${fmtNum(q.pe,1)}，净利增速 ${pct(npg)}` + (peg!=null?`，PEG ${fmtNum(peg,2)}`:'');
+      ok = !(q.pe>60 && peg!=null && peg>2);
+    } else basis='PE数据不足';
+    checks.push({q:6,title:'估值水平',ok,basis,desc:'PE>行业2倍且PEG>2'});
+  }
+  // 7 筹码结构：股东人数连续3季增加
+  {
+    const last3 = hn.slice(0,3); // 已按END_DATE降序，最新在前
+    let basis='', ok=null;
+    if(last3.length>=3){
+      const rats = last3.map(h=>h.HOLDER_NUM_RATIO);
+      basis = '近3季股东人数环比 ' + rats.map(r=>pct(r)).join(' / ');
+      ok = !(rats.every(r=>r!=null&&r>0));
+    } else basis='股东人数数据不足';
+    checks.push({q:7,title:'筹码结构',ok,basis,desc:'股东人数连续3季增加(散户化)'});
+  }
+  // 8 竞争格局：毛利率<15%且持续下降
+  {
+    const last3 = lastN(yrs,3);
+    let basis='', ok=null;
+    if(last3.length>=3){
+      const gms = last3.map(f=>f.XSMLL);
+      basis = '近3年毛利率 ' + gms.map(g=>fmtNum(g,1)+'%').join(' / ');
+      const low = gms.every(g=>g!=null&&g<15);
+      const falling = gms.length>=2 && gms[gms.length-1] < gms[0];
+      ok = !(low && falling);
+    } else basis='毛利率数据不足';
+    checks.push({q:8,title:'竞争格局',ok,basis,desc:'毛利率<15%且持续下降'});
+  }
+  // 9 政策风险：公告关键词
+  {
+    const kw = ['退市','立案','处罚','集采','反垄断','监管','警示','调查','ST','暂停上市'];
+    const hits = data.anns.filter(a=>kw.some(k=>a.title&&a.title.includes(k)));
+    let basis='', ok=null;
+    if(hits.length>0){ basis='公告命中风险词：'+hits.slice(0,3).map(h=>h.title).join('；'); ok=false; }
+    else basis='近期公告未见明显政策风险词，需持续关注';
+    checks.push({q:9,title:'政策风险',ok,basis,desc:'监管点名/集采/反垄断/退市风险'});
+  }
+  // 10 交易纪律
+  checks.push({q:10,title:'交易纪律',ok:null,basis:'买入理由与止损止盈计划需用户自评',desc:'跟风买入且无自己的计划'});
+  return checks;
+}
+
+/* ============ 造假红旗 ============ */
+function runFlags(data){
+  const {fin, bal, cf} = data;
+  const flags = [];
+  const lastFin = fin[0], lastBal = bal[0];
+  // 1 现金流背离
+  {
+    const cfYrs = cf.filter(c=>c.REPORT_DATE&&isYearEnd(c.REPORT_DATE)).sort((a,b)=>a.REPORT_DATE<b.REPORT_DATE?-1:1);
+    const lastCf = cfYrs[cfYrs.length-1];
+    if(lastFin&&lastCf&&lastFin.PARENTNETPROFIT!=null&&lastCf.NETCASH_OPERATE!=null){
+      const np = lastFin.PARENTNETPROFIT, ocf = lastCf.NETCASH_OPERATE;
+      const ratio = np>0 ? ocf/np : null;
+      const bad = (ocf<0 && np>0) || (ratio!=null && ratio<0.5);
+      flags.push({lbl:'现金流背离', bad, txt:`经营现金流 ${fmtYi(ocf)} vs 归母净利 ${fmtYi(np)}（${ratio!=null?fmtNum(ratio*100,0)+'%':'—'}）`+(bad?' — 利润含金量存疑':'')});
+    } else flags.push({lbl:'现金流背离', bad:false, txt:'数据不足，无法判定'});
+  }
+  // 2 存货异常
+  {
+    const bals = bal.slice(0,4).reverse();
+    if(bals.length>=2 && bals[0].INVENTORY!=null && bals[bals.length-1].INVENTORY!=null){
+      const inv0=bals[0].INVENTORY, inv1=bals[bals.length-1].INVENTORY;
+      const invGrowth = (inv0/inv1-1)*100;
+      flags.push({lbl:'存货堆积', bad: invGrowth>50, txt:`存货变动 ${pct(invGrowth)}（近4期）`});
+    } else flags.push({lbl:'存货堆积', bad:false, txt:'数据不足'});
+  }
+  // 3 应收异常
+  {
+    const bals = bal.slice(0,4).reverse();
+    if(bals.length>=2 && bals[0].ACCOUNTS_RECE!=null && bals[bals.length-1].ACCOUNTS_RECE!=null){
+      const ar0=bals[0].ACCOUNTS_RECE, ar1=bals[bals.length-1].ACCOUNTS_RECE;
+      const arGrowth = (ar0/ar1-1)*100;
+      flags.push({lbl:'应收激增', bad: arGrowth>50, txt:`应收账款变动 ${pct(arGrowth)}（近4期）`});
+    } else flags.push({lbl:'应收激增', bad:false, txt:'数据不足'});
+  }
+  // 4 非经常损益占比
+  {
+    if(lastFin&&lastFin.PARENTNETPROFIT!=null&&lastFin.KCFJCXSYJLR!=null&&lastFin.PARENTNETPROFIT!==0){
+      const np=lastFin.PARENTNETPROFIT, kcfj=lastFin.KCFJCXSYJLR;
+      const nonRecur = np-kcfj;
+      const ratio = nonRecur/np*100;
+      flags.push({lbl:'非经常损益', bad: ratio>30, txt:`非经常损益 ${fmtYi(nonRecur)}，占净利 ${fmtNum(ratio,1)}%`});
+    } else flags.push({lbl:'非经常损益', bad:false, txt:'数据不足'});
+  }
+  // 5 杠杆（资产负债率）
+  {
+    if(lastBal&&lastBal.TOTAL_ASSETS!=null&&lastBal.TOTAL_LIABILITIES!=null){
+      const dr = lastBal.TOTAL_LIABILITIES/lastBal.TOTAL_ASSETS*100;
+      flags.push({lbl:'债务杠杆', bad: dr>70, txt:`资产负债率 ${fmtNum(dr,1)}%`});
+    } else flags.push({lbl:'债务杠杆', bad:false, txt:'数据不足'});
+  }
+  // 6 质押率
+  flags.push({lbl:'大股东质押', bad:false, txt:'质押数据源未接入，需人工核查'});
+  return flags;
+}
+
+/* ============ 渲染 ============ */
+function renderQuote(data){
+  const q = data.quote;
+  const cls = q.chgPct>=0?'up':'down';
+  const sign = q.chgPct>=0?'+':'';
+  // 异动标记
+  const tags = [];
+  if(Math.abs(q.chgPct)>=5) tags.push({t:`涨跌幅 ${sign}${q.chgPct.toFixed(2)}%`,cls:q.chgPct>=0?'up-hit':'down-hit'});
+  if(q.turnover>=5) tags.push({t:`换手率 ${q.turnover.toFixed(2)}%`,cls:'warn-hit'});
+  if(q.floatMv<=10) tags.push({t:`小盘 流通市值 ${q.floatMv.toFixed(1)}亿`,cls:'warn-hit'});
+  const volRatio = checkVolumeSurge(data.klines, q.vol);
+  if(volRatio) tags.push({t:`放量 ${volRatio.toFixed(1)}倍`,cls:'warn-hit'});
+  const tagHtml = tags.length? tags.map(t=>`<span class="tag hit ${t.cls}">${t.t}</span>`).join('') : '<span class="tag">无异动</span>';
+  $('quoteCard').innerHTML = `
+    <div class="quote-head">
+      <span class="q-name">${q.name}</span><span class="q-code">${q.code}</span>
+      <span class="q-price">¥${fmtNum(q.price)}</span>
+      <span class="q-chg ${cls}">${sign}${q.chgPct.toFixed(2)}%</span>
+    </div>
+    <div class="q-meta">
+      <span>今开 <b>${fmtNum(q.open)}</b></span>
+      <span>昨收 <b>${fmtNum(q.prevClose)}</b></span>
+      <span>换手率 <b>${fmtNum(q.turnover)}%</b></span>
+      <span>成交额 <b>${fmtYi(q.amount*1e4)}</b></span>
+      <span>PE(动) <b>${fmtNum(q.pe)}</b></span>
+      <span>PB <b>${fmtNum(q.pb)}</b></span>
+      <span>总市值 <b>${fmtNum(q.totalMv)}亿</b></span>
+      <span>流通市值 <b>${fmtNum(q.floatMv)}亿</b></span>
+    </div>
+    <div class="anomaly">${tagHtml}</div>`;
+}
+
+function checkVolumeSurge(klines, todayVol){
+  if(!klines || klines.length<6 || !todayVol) return null;
+  const hist = klines.slice(-6, -1);
+  const avg5 = hist.reduce((a,k)=>a+k.vol,0)/5;
+  if(avg5<=0) return null;
+  const ratio = todayVol/avg5;
+  return ratio>=3 ? ratio : null;
+}
+
+function renderChecklist(data){
+  const checks = runChecklist(data);
+  const html = checks.map(c=>{
+    let mark, markCls;
+    if(c.ok===true){ mark='✓'; markCls='pass'; }
+    else if(c.ok===false){ mark='✗'; markCls='fail'; }
+    else { mark='!'; markCls='warn'; }
+    return `<div class="q-item">
+      <div class="q-mark ${markCls}">${mark}</div>
+      <div class="q-body">
+        <div class="q-title">${c.q}. ${c.title}</div>
+        <div class="q-basis">${c.basis}</div>
+      </div>
+    </div>`;
+  }).join('');
+  $('checklist').innerHTML = html;
+}
+
+function renderFlags(data){
+  const flags = runFlags(data);
+  const html = flags.map(f=>`<div class="flag ${f.bad?'bad':'good'}"><span class="lbl">${f.bad?'⚠️':'✅'} ${f.lbl}：</span>${f.txt}</div>`).join('');
+  $('flags').innerHTML = html;
+}
+
+function renderBoards(data){
+  const boards = data.boards;
+  if(!boards.length){ $('boards').innerHTML='<div class="note">板块数据未获取到</div>'; return; }
+  const precise = boards.filter(b=>b.IS_PRECISE==='1');
+  const others = boards.filter(b=>b.IS_PRECISE!=='1');
+  const render = arr => arr.map(b=>`<span class="board-tag ${b.IS_PRECISE==='1'?'precise':''}">${b.BOARD_NAME}</span>`).join('');
+  $('boards').innerHTML = `
+    <div class="chart-title">核心赛道（精确匹配）</div>
+    <div class="board-tags" style="margin-bottom:10px">${render(precise)||'<span class="note">无精确板块</span>'}</div>
+    <div class="chart-title">相关概念</div>
+    <div class="board-tags">${render(others.slice(0,12))||'<span class="note">无</span>'}</div>
+    <div class="note">景气度（板块强弱/资金热度）需盘中板块行情，预启动/盘后暂无法量化，供参考。</div>`;
+}
+
+function renderValuation(data){
+  const q = data.quote;
+  const fin = data.fin;
+  const yrs = yearReports(fin);
+  let peHist='', pbHist='';
+  if(q.pe!=null){ peHist = `<div>PE(动态) <b>${fmtNum(q.pe)}</b></div>`; }
+  if(q.pb!=null){ pbHist = `<div>PB <b>${fmtNum(q.pb)}</b></div>`; }
+  const npg = yrs.length>=2 ? (yrs[yrs.length-1].PARENTNETPROFITTZ||0) : 0;
+  const peg = (npg>0&&q.pe!=null) ? q.pe/npg : null;
+  $('valuation').innerHTML = `
+    <div class="q-meta">
+      ${peHist}${pbHist}
+      <div>净利增速 <b>${pct(npg)}</b></div>
+      ${peg!=null?`<div>PEG <b>${fmtNum(peg)}</b></div>`:''}
+    </div>
+    <div class="note">行业 PE/PB 均值对比：需板块成分股聚合，首版暂显示个股绝对估值 + PEG。${peg!=null&&peg>2?'<span style="color:#f85149">PEG>2 提示估值偏高。</span>':''}</div>`;
+}
+
+function renderHolders(data){
+  const all = data.holders;
+  if(!all.length){ $('holders').innerHTML='<div class="note">股东数据未获取到</div>'; return; }
+  // 只取最新一期，按排名升序取前10
+  const latestDate = all[0].END_DATE;
+  const hs = all.filter(h=>h.END_DATE===latestDate).sort((a,b)=>(a.HOLDER_RANK||0)-(b.HOLDER_RANK||0)).slice(0,10);
+  const endDate = (latestDate||'').slice(0,10);
+  const rows = hs.map(h=>{
+    const name = h.HOLDER_NAME||'—';
+    const num = h.HOLD_NUM!=null? fmtYi(h.HOLD_NUM)+'股' : '—';
+    const ratio = h.FREE_HOLDNUM_RATIO!=null? fmtNum(h.FREE_HOLDNUM_RATIO)+'%' : '—';
+    return `<tr><td>${name}</td><td class="num">${num}</td><td class="num">${ratio}</td></tr>`;
+  }).join('');
+  $('holders').innerHTML = `
+    <div class="chart-title">截至 ${endDate} 十大流通股东（持股数 / 占流通股比例）</div>
+    <table><thead><tr><th>股东名称</th><th>持股数</th><th>占流通比</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="note">平均成本、增减持记录需历史股东数据源，首版暂以持股数+比例呈现。</div>`;
+}
+
+function renderAnnouncements(data){
+  const anns = data.anns;
+  if(!anns.length){ $('announcements').innerHTML='<div class="note">近期无公告或未获取到</div>'; return; }
+  const kw = ['减持','增持','业绩','预','重大','龙虎榜','大宗','回购','质押','停牌','立案','处罚'];
+  const html = anns.map(a=>{
+    const isHit = kw.some(k=>a.title&&a.title.includes(k));
+    return `<div class="ann-item"><span class="ann-date">${a.date}</span> ${isHit?'<span style="color:#d29922">⚠️</span>':''} <span class="ann-title">${a.title}</span></div>`;
+  }).join('');
+  $('announcements').innerHTML = html;
+}
+
+/* ============ 图表 ============ */
+function drawKline(canvas, klines){
+  const dpr = window.devicePixelRatio||1;
+  const w = canvas.clientWidth||800, h = 300;
+  canvas.width = w*dpr; canvas.height = h*dpr;
+  canvas.style.height = h+'px';
+  const ctx = canvas.getContext('2d'); ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,w,h);
+  if(!klines.length){ ctx.fillStyle='#8b949e'; ctx.fillText('无K线数据', w/2-30, h/2); return; }
+  const pad = {l:10,r:50,t:10,b:22};
+  const pw = w-pad.l-pad.r, ph = h-pad.t-pad.b;
+  const highs = klines.map(k=>k.high), lows = klines.map(k=>k.low);
+  const max = Math.max(...highs), min = Math.min(...lows);
+  const range = max-min || 1;
+  const n = klines.length;
+  const cw = pw/n, bw = Math.max(cw*0.7, 1);
+  const y = v => pad.t + (max-v)/range*ph;
+  // 网格 + 价格标签
+  ctx.strokeStyle='#2d333b'; ctx.fillStyle='#8b949e'; ctx.font='10px sans-serif'; ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const p = max - range*i/4, yy = y(p);
+    ctx.beginPath(); ctx.moveTo(pad.l,yy); ctx.lineTo(w-pad.r,yy); ctx.stroke();
+    ctx.fillText(p.toFixed(2), w-pad.r+4, yy+3);
+  }
+  klines.forEach((k,i)=>{
+    const x = pad.l + i*cw + cw/2;
+    const up = k.close>=k.open;
+    ctx.strokeStyle = up ? '#f85149' : '#3fb950';
+    ctx.fillStyle = up ? '#f85149' : '#3fb950';
+    ctx.beginPath(); ctx.moveTo(x,y(k.high)); ctx.lineTo(x,y(k.low)); ctx.stroke();
+    const yo = y(k.open), yc = y(k.close);
+    const top = Math.min(yo,yc), bh = Math.max(Math.abs(yo-yc),1);
+    ctx.fillRect(x-bw/2, top, bw, bh);
+  });
+  // 均线 MA5/MA10/MA20
+  const ma = (period)=>{
+    const arr=[];
+    for(let i=period-1;i<n;i++){ const s=klines.slice(i-period+1,i+1).reduce((a,k)=>a+k.close,0)/period; arr.push({i,x:pad.l+i*cw+cw/2,v:s}); }
+    return arr;
+  };
+  const mas = [['MA5',5,'#e6c07b'],['MA10',10,'#58a6ff'],['MA20',20,'#bc8cff']];
+  mas.forEach(([nm,p,color])=>{
+    const pts = ma(p);
+    if(!pts.length) return;
+    ctx.strokeStyle=color; ctx.lineWidth=1; ctx.beginPath();
+    pts.forEach((pt,idx)=>{ const yy=y(pt.v); idx===0?ctx.moveTo(pt.x,yy):ctx.lineTo(pt.x,yy); });
+    ctx.stroke();
+  });
+  // 图例
+  ctx.fillStyle='#e6c07b'; ctx.fillText('MA5', pad.l, 14);
+  ctx.fillStyle='#58a6ff'; ctx.fillText('MA10', pad.l+36, 14);
+  ctx.fillStyle='#bc8cff'; ctx.fillText('MA20', pad.l+72, 14);
+}
+
+function drawPerf(canvas, fin){
+  const dpr = window.devicePixelRatio||1;
+  const w = canvas.clientWidth||800, h = 280;
+  canvas.width = w*dpr; canvas.height = h*dpr;
+  canvas.style.height = h+'px';
+  const ctx = canvas.getContext('2d'); ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,w,h);
+  const yrs = yearReports(fin).slice(-5);
+  if(yrs.length<2){ ctx.fillStyle='#8b949e'; ctx.fillText('年度财报不足', w/2-30, h/2); return; }
+  const revs = yrs.map(f=>f.TOTALOPERATEREVE).filter(v=>v!=null);
+  const nps = yrs.map(f=>f.PARENTNETPROFIT).filter(v=>v!=null);
+  const maxR = Math.max(...revs,1), maxN = Math.max(...nps,1);
+  const pad={l:10,r:60,t:14,b:24}, pw=w-pad.l-pad.r, ph=h-pad.t-pad.b;
+  const y1 = v => pad.t + (maxR-v)/maxR*ph;
+  const y2 = v => pad.t + (maxN-v)/maxN*ph;
+  const n = yrs.length, cw = pw/n;
+  ctx.strokeStyle='#2d333b'; ctx.lineWidth=1;
+  [0,0.25,0.5,0.75,1].forEach(r=>{ const yy=pad.t+r*ph; ctx.beginPath(); ctx.moveTo(pad.l,yy); ctx.lineTo(w-pad.r,yy); ctx.stroke(); });
+  const x = i => pad.l + i*cw + cw/2;
+  const drawLine=(vals,color,yfn,label)=>{
+    ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.beginPath();
+    vals.forEach((v,i)=>{ const xx=x(i), yy=yfn(v); i===0?ctx.moveTo(xx,yy):ctx.lineTo(xx,yy); });
+    ctx.stroke();
+    ctx.fillStyle=color;
+    vals.forEach((v,i)=>{ ctx.beginPath(); ctx.arc(x(i),yfn(v),2.5,0,Math.PI*2); ctx.fill(); });
+    ctx.fillText(label, w-pad.r+4, yfn(vals[vals.length-1])+3);
+  };
+  drawLine(revs,'#58a6ff',y1,'营收(左轴)');
+  drawLine(nps,'#e6c07b',y2,'净利(右轴)');
+  // 年份
+  ctx.fillStyle='#8b949e'; ctx.font='10px sans-serif';
+  yrs.forEach((f,i)=>ctx.fillText((f.REPORT_DATE||'').slice(0,4), x(i)-14, h-8));
+}
+
+/* ============ 预启动筛选 ============ */
+async function fetchAllMarket(){
+  const base = 'https://push2delay.eastmoney.com/api/qt/clist/get?po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048&fields=f2,f3,f8,f10,f12,f14,f21';
+  const first = await (await fetch(base+'&pn=1&pz=100')).json();
+  const total = first.data.total;
+  const pages = Math.ceil(total/100);
+  let all = first.data.diff||[];
+  for(let start=2; start<=pages; start+=12){
+    const batch = [];
+    for(let p=start; p<Math.min(start+12,pages+1); p++) batch.push(fetch(base+'&pn='+p+'&pz=100').then(r=>r.json()));
+    const rs = await Promise.all(batch);
+    rs.forEach(d=>{ all = all.concat(d.data.diff||[]); });
+  }
+  return all;
+}
+
+function checkBreakout(klines){
+  if(klines.length < 26) return null;
+  // MA20 用今日之前的20根（不含今日，避免今日价污染均线）
+  const hist = klines.slice(0,-1);
+  const ma20 = hist.slice(-20).reduce((a,k)=>a+k.close,0)/20;
+  const cur = klines[klines.length-1].close; // 今日收盘/实时价
+  const prev1 = hist[hist.length-1].close;  // 昨日
+  const prev5 = hist[hist.length-5].close;  // 5日前
+  if(cur <= ma20) return null;               // 未站上均线
+  if(!(prev1 < ma20 || prev5 < ma20)) return null; // 5日内无突破动作
+  const dev = (cur/ma20-1)*100;
+  if(dev > 8) return null;                   // 偏离过大=追高
+  return { ma20, dev };
+}
+
+async function scanPreLaunch(){
+  const ps = $('poolStatus');
+  ps.classList.remove('hidden');
+  ps.textContent = '正在拉取全市场行情…';
+  $('poolResult').innerHTML = '';
+  try{
+    const all = await fetchAllMarket();
+    ps.textContent = '全市场 '+all.length+' 只已拉取，第一层筛选中…';
+    const cands = all.filter(s => s.f3!=null && s.f3>=3 && s.f3<=5 && s.f10!=null && s.f10>=2);
+    ps.textContent = '第一层筛出 '+cands.length+' 只（涨幅3%~5% + 量比≥2），逐个验证突破均线…';
+    const results = [];
+    for(let i=0;i<cands.length;i++){
+      const c = cands[i];
+      ps.textContent = '验证突破 '+(i+1)+'/'+cands.length+'：'+c.f14;
+      try{
+        const klines = await fetchKlines(c.f12);
+        const br = checkBreakout(klines);
+        if(br) results.push({code:c.f12, name:c.f14, chg:c.f3, volRatio:c.f10, turnover:c.f8, floatMv:c.f21, dev:br.dev});
+      }catch(e){}
+      if(i%10===0) await new Promise(r=>setTimeout(r,0));
+    }
+    renderPool(results);
+  }catch(err){
+    ps.textContent = '扫描失败：'+err.message;
+  }
+}
+
+function renderPool(results){
+  $('poolStatus').classList.add('hidden');
+  if(!results.length){ $('poolResult').innerHTML='<div class="note">当前无符合条件的预启动候选（可能非交易时段，或今日无 3%~5% 放量突破的股票）。</div>'; return; }
+  results.sort((a,b)=>b.volRatio-a.volRatio);
+  const rows = results.map(r=>`<tr>
+    <td class="code" onclick="jumpTo('${r.code}')">${r.code}</td>
+    <td>${r.name}</td>
+    <td class="num">${r.chg.toFixed(2)}%</td>
+    <td class="num">${r.volRatio.toFixed(2)}</td>
+    <td class="num">${r.turnover!=null?r.turnover.toFixed(2)+'%':'—'}</td>
+    <td class="num">${r.floatMv!=null?(r.floatMv/1e8).toFixed(1)+'亿':'—'}</td>
+    <td class="num">+${r.dev.toFixed(1)}%</td>
+  </tr>`).join('');
+  $('poolResult').innerHTML = `
+    <div class="chart-title">共 ${results.length} 只候选（按量比排序）</div>
+    <table class="pool-table"><thead><tr><th>代码</th><th>名称</th><th>涨幅</th><th>量比</th><th>换手</th><th>流通市值</th><th>距MA20</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="note">点击代码查看单股诊断。距MA20=当前价相对20日均线偏离。</div>`;
+}
+
+function jumpTo(code){
+  $('codeInput').value = code;
+  switchTab('diag');
+  loadStock(code);
+}
+
+/* ============ 主流程 ============ */
+let currentCode = null;
+
+function showErr(msg){ const e=$('errBox'); e.textContent=msg; e.classList.remove('hidden'); }
+function hideErr(){ $('errBox').classList.add('hidden'); }
+
+async function queryStock(){
+  const code = $('codeInput').value.trim();
+  if(!isValidCode(code)){ showErr('请输入 6 位数字股票代码'); return; }
+  hideErr();
+  currentCode = code;
+  const url = new URL(location.href); url.searchParams.set('code', code); history.replaceState(null,'',url);
+  await loadStock(code);
+}
+
+async function loadStock(code){
+  $('diagLoading').classList.remove('hidden');
+  $('diagContent').classList.add('hidden');
+  hideErr();
+  try{
+    const secuCode = toSecuCode(code);
+    const [quote, klines, fin, bal, cf, holders, boards, hn, anns] = await Promise.all([
+      fetchQuote(code), fetchKlines(code), fetchFinance(secuCode), fetchBalance(secuCode),
+      fetchCashflow(secuCode), fetchHolders(secuCode), fetchBoards(secuCode), fetchHolderNum(secuCode), fetchAnnouncements(code)
+    ]);
+    const data = {quote, klines, fin, bal, cf, holders, boards, hn, anns};
+    renderQuote(data);
+    renderVerdict(data);
+    renderChecklist(data);
+    renderFlags(data);
+    renderBoards(data);
+    renderValuation(data);
+    renderHolders(data);
+    renderAnnouncements(data);
+    // 图表
+    drawKline($('klineCanvas'), klines.slice(-90));
+    drawPerf($('perfCanvas'), fin);
+    $('diagLoading').classList.add('hidden');
+    $('diagContent').classList.remove('hidden');
+  }catch(err){
+    $('diagLoading').classList.add('hidden');
+    showErr('诊断失败：'+err.message+'（请检查代码是否正确，或稍后重试）');
+  }
+}
+
+function renderVerdict(data){
+  const checks = runChecklist(data);
+  const fails = checks.filter(c=>c.ok===false).length;
+  const warns = checks.filter(c=>c.ok===null).length;
+  let cls, label, reason;
+  if(fails>=3){ cls='avoid'; label='❌ 不碰'; reason=fails+' 项一票否决，风险偏高'; }
+  else if(fails>=1){ cls='watch'; label='⚠️ 观察'; reason=fails+' 项否决 + '+warns+' 项待核查，谨慎对待'; }
+  else { cls='buy'; label='✅ 可买（待你决策）'; reason='核心十问基本通过（'+warns+' 项需人工核查）'; }
+  $('verdictCard').innerHTML = `<div class="verdict ${cls}">${label}<div class="reason">${reason}</div></div>`;
+}
+
+function pickHot(v){ if(v){ $('codeInput').value=v; queryStock(); } }
+function refresh(){ if(currentCode) loadStock(currentCode); }
+function switchTab(t){
+  if(t==='diag'){ $('diagView').classList.remove('hidden'); $('poolView').classList.add('hidden'); $('tabDiag').classList.add('active'); $('tabPool').classList.remove('active'); }
+  else { $('diagView').classList.add('hidden'); $('poolView').classList.remove('hidden'); $('tabDiag').classList.remove('active'); $('tabPool').classList.add('active'); }
+}
+
+/* 回车触发 */
+$('codeInput').addEventListener('keydown', e=>{ if(e.key==='Enter') queryStock(); });
+
+/* URL 参数自动加载 */
+(function(){
+  const code = new URL(location.href).searchParams.get('code');
+  if(code && isValidCode(code)){ $('codeInput').value=code; loadStock(code); }
+})();
+</script>
+</body>
+</html>
