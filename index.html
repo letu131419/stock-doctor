@@ -262,11 +262,11 @@ async function fetchCashflow(secuCode){
     'SECUCODE,REPORT_DATE,NETCASH_OPERATE,NETCASH_INVEST,NETCASH_FINANCE',
     '(SECUCODE="'+secuCode+'")', 20);
 }
-// 十大流通股东
+// 十大流通股东（拉40条=最近两期，用于增减持对比）
 async function fetchHolders(secuCode){
   return fetchEmData('RPT_F10_EH_FREEHOLDERS',
     'SECUCODE,END_DATE,HOLDER_NAME,HOLD_NUM,FREE_HOLDNUM_RATIO,HOLDER_RANK',
-    '(SECUCODE="'+secuCode+'")', 20, 'END_DATE');
+    '(SECUCODE="'+secuCode+'")', 40, 'END_DATE');
 }
 // 概念板块
 async function fetchBoards(secuCode){
@@ -288,6 +288,22 @@ async function fetchAnnouncements(code){
   const d = await r.json();
   const list = (d.data && d.data.list) || [];
   return list.map(a => ({title:a.title, date:(a.notice_date||'').slice(0,10), type:(a.columns&&a.columns[0]&&a.columns[0].column_name)||''}));
+}
+
+// 质押比例（中登数据 RPT_CSDC_LIST）
+async function fetchPledge(code){
+  const url = 'https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_CSDC_LIST&columns=ALL&sortColumns=TRADE_DATE&sortTypes=-1&pageSize=3&pageNumber=1&source=WEB&client=WEB&filter=(SECURITY_CODE%3D%22'+code+'%22)';
+  const r = await fetch(url, {referrerPolicy:'no-referrer'});
+  const d = await r.json();
+  return (d.result && d.result.data) || [];
+}
+
+// 行业板块行情（赛道景气度 + 行业PE）
+async function fetchBoardQuotes(){
+  const url = 'https://push2delay.eastmoney.com/api/qt/clist/get?pn=1&pz=500&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:90+t:2&fields=f3,f9,f12,f14,f62';
+  const r = await fetch(url);
+  const d = await r.json();
+  return (d.data && d.data.diff) || [];
 }
 
 /* ============ 十问判定逻辑 ============ */
@@ -349,8 +365,17 @@ function runChecklist(data){
     } else basis='现金流年度数据不足';
     checks.push({q:4,title:'利润真实性',ok,basis,desc:'经营现金流连续2年为负'});
   }
-  // 5 治理结构：质押/关联交易（质押数据源待接入）
-  checks.push({q:5,title:'治理结构',ok:null,basis:'大股东质押率需人工核查（质押数据源未接入）',desc:'质押>60% / 关联交易>30% / 实控人被调查'});
+  // 5 治理结构：质押>60%
+  {
+    const pledge = data.pledge;
+    let basis='', ok=null;
+    if(pledge.length && pledge[0].PLEDGE_RATIO!=null){
+      const pr = pledge[0].PLEDGE_RATIO;
+      basis = `质押比例 ${fmtNum(pr,2)}%（中登，${(pledge[0].TRADE_DATE||'').slice(0,10)}）`;
+      ok = pr < 60;
+    } else basis='质押数据未获取到';
+    checks.push({q:5,title:'治理结构',ok,basis,desc:'质押>60% / 关联交易>30% / 实控人被调查'});
+  }
   // 6 估值水平：PE>行业2倍 且 PEG>2
   {
     const q = data.quote;
@@ -452,7 +477,13 @@ function runFlags(data){
     } else flags.push({lbl:'债务杠杆', bad:false, txt:'数据不足'});
   }
   // 6 质押率
-  flags.push({lbl:'大股东质押', bad:false, txt:'质押数据源未接入，需人工核查'});
+  {
+    const pledge = data.pledge;
+    if(pledge.length && pledge[0].PLEDGE_RATIO!=null){
+      const pr = pledge[0].PLEDGE_RATIO;
+      flags.push({lbl:'大股东质押', bad: pr>60, txt:`质押比例 ${fmtNum(pr,2)}%（中登 ${(pledge[0].TRADE_DATE||'').slice(0,10)}）`});
+    } else flags.push({lbl:'大股东质押', bad:false, txt:'数据未获取到'});
+  }
   return flags;
 }
 
@@ -527,49 +558,81 @@ function renderBoards(data){
   const precise = boards.filter(b=>b.IS_PRECISE==='1');
   const others = boards.filter(b=>b.IS_PRECISE!=='1');
   const render = arr => arr.map(b=>`<span class="board-tag ${b.IS_PRECISE==='1'?'precise':''}">${b.BOARD_NAME}</span>`).join('');
+  // 景气度：精确板块匹配板块行情（当日涨跌幅 + 主力净流入）
+  const matched = [];
+  for(const b of precise){
+    const hit = (data.boardQuotes||[]).find(bq => bq.f14 && (bq.f14===b.BOARD_NAME || bq.f14.includes(b.BOARD_NAME) || b.BOARD_NAME.includes(bq.f14)));
+    if(hit) matched.push({name:b.BOARD_NAME, chg:hit.f3, inflow:hit.f62});
+  }
+  let boom = '';
+  if(matched.length){
+    boom = '<div class="chart-title" style="margin-top:10px">赛道景气度（当日板块表现）</div><div class="board-tags">' +
+      matched.map(m=>{
+        const up = m.chg>=0;
+        const flow = m.inflow!=null ? ((m.inflow>=0?'主力净流入':'主力净流出')+' '+(Math.abs(m.inflow)/1e8).toFixed(1)+'亿') : '资金—';
+        return `<span class="board-tag ${up?'precise':''}">${m.name} ${up?'+':''}${m.chg.toFixed(2)}% · ${flow}</span>`;
+      }).join('') + '</div>';
+  }
   $('boards').innerHTML = `
     <div class="chart-title">核心赛道（精确匹配）</div>
     <div class="board-tags" style="margin-bottom:10px">${render(precise)||'<span class="note">无精确板块</span>'}</div>
     <div class="chart-title">相关概念</div>
     <div class="board-tags">${render(others.slice(0,12))||'<span class="note">无</span>'}</div>
-    <div class="note">景气度（板块强弱/资金热度）需盘中板块行情，预启动/盘后暂无法量化，供参考。</div>`;
+    ${boom}`;
 }
 
 function renderValuation(data){
   const q = data.quote;
   const fin = data.fin;
   const yrs = yearReports(fin);
-  let peHist='', pbHist='';
-  if(q.pe!=null){ peHist = `<div>PE(动态) <b>${fmtNum(q.pe)}</b></div>`; }
-  if(q.pb!=null){ pbHist = `<div>PB <b>${fmtNum(q.pb)}</b></div>`; }
   const npg = yrs.length>=2 ? (yrs[yrs.length-1].PARENTNETPROFITTZ||0) : 0;
   const peg = (npg>0&&q.pe!=null) ? q.pe/npg : null;
+  // 行业PE：个股精确板块名匹配板块行情 f9
+  const preciseBoards = (data.boards||[]).filter(b=>b.IS_PRECISE==='1').map(b=>b.BOARD_NAME);
+  let indPe=null, indName=null;
+  for(const bn of preciseBoards){
+    const hit = (data.boardQuotes||[]).find(bq => bq.f14 && bq.f9!=null && (bq.f14===bn || bq.f14.includes(bn) || bn.includes(bq.f14)));
+    if(hit){ indPe=hit.f9; indName=hit.f14; break; }
+  }
+  const peVsInd = (q.pe!=null && indPe!=null) ? (q.pe/indPe-1)*100 : null;
   $('valuation').innerHTML = `
     <div class="q-meta">
-      ${peHist}${pbHist}
+      ${q.pe!=null?`<div>PE(动) <b>${fmtNum(q.pe)}</b></div>`:''}
+      ${q.pb!=null?`<div>PB <b>${fmtNum(q.pb)}</b></div>`:''}
+      ${indPe!=null?`<div>行业PE <b>${fmtNum(indPe)}</b>（${indName}）</div>`:''}
       <div>净利增速 <b>${pct(npg)}</b></div>
       ${peg!=null?`<div>PEG <b>${fmtNum(peg)}</b></div>`:''}
     </div>
-    <div class="note">行业 PE/PB 均值对比：需板块成分股聚合，首版暂显示个股绝对估值 + PEG。${peg!=null&&peg>2?'<span style="color:#f85149">PEG>2 提示估值偏高。</span>':''}</div>`;
+    <div class="note">
+      ${peVsInd!=null?`个股PE vs 行业PE：<b>${peVsInd>0?'高 '+fmtNum(peVsInd,0)+'%':'低 '+fmtNum(Math.abs(peVsInd),0)+'%'}</b>（${peVsInd>0?'相对高估':'相对低估'}）。`:''}
+      ${peg!=null&&peg>2?'<span style="color:#f85149">PEG>2 提示估值偏高。</span>':'行业PB均值暂缺数据源。'}
+    </div>`;
 }
 
 function renderHolders(data){
   const all = data.holders;
   if(!all.length){ $('holders').innerHTML='<div class="note">股东数据未获取到</div>'; return; }
-  // 只取最新一期，按排名升序取前10
-  const latestDate = all[0].END_DATE;
+  const dates = [...new Set(all.map(h=>h.END_DATE))].sort().reverse();
+  const latestDate = dates[0], prevDate = dates[1];
   const hs = all.filter(h=>h.END_DATE===latestDate).sort((a,b)=>(a.HOLDER_RANK||0)-(b.HOLDER_RANK||0)).slice(0,10);
   const endDate = (latestDate||'').slice(0,10);
+  const prevMap = {};
+  all.filter(h=>h.END_DATE===prevDate).forEach(h=>{ prevMap[h.HOLDER_NAME]=h.HOLD_NUM; });
   const rows = hs.map(h=>{
     const name = h.HOLDER_NAME||'—';
     const num = h.HOLD_NUM!=null? fmtYi(h.HOLD_NUM)+'股' : '—';
     const ratio = h.FREE_HOLDNUM_RATIO!=null? fmtNum(h.FREE_HOLDNUM_RATIO)+'%' : '—';
-    return `<tr><td>${name}</td><td class="num">${num}</td><td class="num">${ratio}</td></tr>`;
+    let change = '—';
+    if(h.HOLD_NUM!=null && prevMap[name]!=null && prevMap[name]>0){
+      const diff = (h.HOLD_NUM/prevMap[name]-1)*100;
+      change = (diff>0?'+':'')+diff.toFixed(1)+'%';
+    }
+    return `<tr><td>${name}</td><td class="num">${num}</td><td class="num">${ratio}</td><td class="num">${change}</td></tr>`;
   }).join('');
   $('holders').innerHTML = `
-    <div class="chart-title">截至 ${endDate} 十大流通股东（持股数 / 占流通股比例）</div>
-    <table><thead><tr><th>股东名称</th><th>持股数</th><th>占流通比</th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="note">平均成本、增减持记录需历史股东数据源，首版暂以持股数+比例呈现。</div>`;
+    <div class="chart-title">截至 ${endDate} 十大流通股东（环比 ${prevDate?(prevDate||'').slice(0,10):'—'}）</div>
+    <table><thead><tr><th>股东名称</th><th>持股数</th><th>占流通比</th><th>环比增减</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="note">增减持=本期 vs 上期持股数环比。平均成本估算需历史成交数据，暂以增减持呈现。</div>`;
 }
 
 function renderAnnouncements(data){
@@ -779,9 +842,11 @@ async function loadStock(code){
       fetchQuote(code), fetchKlines(code), fetchFinance(secuCode), fetchBalance(secuCode),
       fetchCashflow(secuCode), fetchHolders(secuCode), fetchBoards(secuCode), fetchHolderNum(secuCode)
     ]);
-    let anns = [];
-    try { anns = await fetchAnnouncements(code); } catch(e) { anns = []; }
-    const data = {quote, klines, fin, bal, cf, holders, boards, hn, anns};
+    let anns = [], pledge = [], boardQuotes = [];
+    try { anns = await fetchAnnouncements(code); } catch(e) {}
+    try { pledge = await fetchPledge(code); } catch(e) {}
+    try { boardQuotes = await fetchBoardQuotes(); } catch(e) {}
+    const data = {quote, klines, fin, bal, cf, holders, boards, hn, anns, pledge, boardQuotes};
     renderQuote(data);
     renderVerdict(data);
     renderChecklist(data);
