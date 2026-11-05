@@ -496,9 +496,11 @@ function runFlags(data){
   // 1 现金流背离
   {
     const cfYrs = cf.filter(c=>c.REPORT_DATE&&isYearEnd(c.REPORT_DATE)).sort((a,b)=>a.REPORT_DATE<b.REPORT_DATE?-1:1);
+    const finYrs = fin.filter(f=>f.REPORT_DATE&&isYearEnd(f.REPORT_DATE)).sort((a,b)=>a.REPORT_DATE<b.REPORT_DATE?-1:1);
     const lastCf = cfYrs[cfYrs.length-1];
-    if(lastFin&&lastCf&&lastFin.PARENTNETPROFIT!=null&&lastCf.NETCASH_OPERATE!=null){
-      const np = lastFin.PARENTNETPROFIT, ocf = lastCf.NETCASH_OPERATE;
+    const lastFinYr = finYrs[finYrs.length-1];
+    if(lastFinYr&&lastCf&&lastFinYr.PARENTNETPROFIT!=null&&lastCf.NETCASH_OPERATE!=null){
+      const np = lastFinYr.PARENTNETPROFIT, ocf = lastCf.NETCASH_OPERATE;
       const ratio = np>0 ? ocf/np : null;
       const bad = (ocf<0 && np>0) || (ratio!=null && ratio<0.5);
       flags.push({lbl:'现金流背离', bad, txt:`经营现金流 ${fmtYi(ocf)} vs 归母净利 ${fmtYi(np)}（${ratio!=null?fmtNum(ratio*100,0)+'%':'—'}）`+(bad?' — 利润含金量存疑':'')});
@@ -509,8 +511,8 @@ function runFlags(data){
     const bals = bal.slice(0,4).reverse();
     if(bals.length>=2 && bals[0].INVENTORY!=null && bals[bals.length-1].INVENTORY!=null){
       const inv0=bals[0].INVENTORY, inv1=bals[bals.length-1].INVENTORY;
-      const invGrowth = (inv0/inv1-1)*100;
-      flags.push({lbl:'存货堆积', bad: invGrowth>50, txt:`存货变动 ${pct(invGrowth)}（近4期）`});
+      const invGrowth = inv0!=0 ? (inv1/inv0-1)*100 : null;
+      flags.push({lbl:'存货堆积', bad: invGrowth!=null&&invGrowth>50, txt: invGrowth!=null?`存货变动 ${pct(invGrowth)}（${fmtYi(inv0)}→${fmtYi(inv1)}，近4期）`:'数据不足'});
     } else flags.push({lbl:'存货堆积', bad:false, txt:'数据不足'});
   }
   // 3 应收异常
@@ -518,8 +520,8 @@ function runFlags(data){
     const bals = bal.slice(0,4).reverse();
     if(bals.length>=2 && bals[0].ACCOUNTS_RECE!=null && bals[bals.length-1].ACCOUNTS_RECE!=null){
       const ar0=bals[0].ACCOUNTS_RECE, ar1=bals[bals.length-1].ACCOUNTS_RECE;
-      const arGrowth = (ar0/ar1-1)*100;
-      flags.push({lbl:'应收激增', bad: arGrowth>50, txt:`应收账款变动 ${pct(arGrowth)}（近4期）`});
+      const arGrowth = ar0!=0 ? (ar1/ar0-1)*100 : null;
+      flags.push({lbl:'应收激增', bad: arGrowth!=null&&arGrowth>50, txt: arGrowth!=null?`应收账款变动 ${pct(arGrowth)}（${fmtYi(ar0)}→${fmtYi(ar1)}，近4期）`:'数据不足'});
     } else flags.push({lbl:'应收激增', bad:false, txt:'数据不足'});
   }
   // 4 非经常损益占比
