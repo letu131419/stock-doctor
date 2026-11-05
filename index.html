@@ -265,7 +265,7 @@ async function fetchQuote(code){
 // 腾讯 K 线（日K，前复权）
 async function fetchKlines(code){
   const ticker = toTicker(code);
-  const url = 'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param='+ticker+',day,,,100,qfq';
+  const url = 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param='+ticker+',day,,,100,qfq';
   const r = await fetch(url);
   const d = await r.json();
   const node = d.data && d.data[ticker];
@@ -1023,10 +1023,12 @@ async function loadStock(code){
   hideErr();
   try{
     const secuCode = toSecuCode(code);
-    const [quote, klines, fin, bal, cf, holders, boards, hn] = await Promise.all([
-      fetchQuote(code), fetchKlines(code), fetchFinance(secuCode), fetchBalance(secuCode),
+    const [quote, fin, bal, cf, holders, boards, hn] = await Promise.all([
+      fetchQuote(code), fetchFinance(secuCode), fetchBalance(secuCode),
       fetchCashflow(secuCode), fetchHolders(secuCode), fetchBoards(secuCode), fetchHolderNum(secuCode)
     ]);
+    let klines = [];
+    try { klines = await fetchKlines(code); } catch(e) { klines = []; }
     let anns = [], pledge = [], boardQuotes = [], holderChange = [], boardComponents = [], lhb = [], blockTrade = [];
     try { anns = await fetchAnnouncements(code); } catch(e) {}
     try { pledge = await fetchPledge(code); } catch(e) {}
