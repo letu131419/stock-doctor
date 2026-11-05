@@ -961,11 +961,16 @@ async function loadStock(code){
 
 function renderVerdict(data){
   const checks = runChecklist(data);
+  const flags = runFlags(data);
   const fails = checks.filter(c=>c.ok===false).length;
+  const flagBad = flags.filter(f=>f.bad).length;
   const warns = checks.filter(c=>c.ok===null).length;
+  const failParts = [];
+  if(fails) failParts.push(fails+' 项否决');
+  if(flagBad) failParts.push(flagBad+' 项造假红旗');
   let cls, label, reason;
-  if(fails>=3){ cls='avoid'; label='❌ 不碰'; reason=fails+' 项一票否决，风险偏高'; }
-  else if(fails>=1){ cls='watch'; label='⚠️ 观察'; reason=fails+' 项否决 + '+warns+' 项待核查，谨慎对待'; }
+  if(fails>=3 || flagBad>=2){ cls='avoid'; label='❌ 不碰'; reason=failParts.join(' + ')+'，风险偏高'; }
+  else if(fails>=1 || flagBad>=1){ cls='watch'; label='⚠️ 观察'; reason=failParts.join(' + ')+(warns?' + '+warns+' 项待核查':'')+'，谨慎对待'; }
   else { cls='buy'; label='✅ 可买（待你决策）'; reason='核心十问基本通过（'+warns+' 项需人工核查）'; }
   $('verdictCard').innerHTML = `<div class="verdict ${cls}">${label}<div class="reason">${reason}</div></div>`;
 }
