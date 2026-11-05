@@ -246,6 +246,9 @@ canvas{width:100%;height:auto;background:var(--card2);border-radius:6px}
 
 <script>
 /* ============ 工具函数 ============ */
+/* 确保每次拉最新数据：全局 fetch 默认 no-store，绕过浏览器缓存（裸 GET 会命中启发式缓存，导致行情/财务不实时） */
+const __rawFetch = window.fetch.bind(window);
+window.fetch = (url, opts={}) => __rawFetch(url, {...opts, cache:'no-store'});
 const $ = id => document.getElementById(id);
 const fmtNum = (n, d=2) => (n==null||isNaN(n)) ? '—' : Number(n).toLocaleString('zh-CN',{maximumFractionDigits:d,minimumFractionDigits:d});
 const fmtYi = (n) => n==null ? '—' : (Math.abs(n)>=1e8 ? (n/1e8).toFixed(2)+'亿' : (Math.abs(n)>=1e4 ? (n/1e4).toFixed(2)+'万' : n.toFixed(2)));
