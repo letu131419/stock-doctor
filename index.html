@@ -270,7 +270,7 @@ async function fetchKlines(code){
   const d = await r.json();
   const node = d.data && d.data[ticker];
   const klines = (node && (node.qfqday || node.day)) || [];
-  return klines.map(k => ({date:k[0], open:parseFloat(k[1]), high:parseFloat(k[2]), low:parseFloat(k[3]), close:parseFloat(k[4]), vol:parseFloat(k[5])}));
+  return klines.map(k => ({date:k[0], open:parseFloat(k[1]), close:parseFloat(k[2]), high:parseFloat(k[3]), low:parseFloat(k[4]), vol:parseFloat(k[5])}));
 }
 
 // 东财 datacenter 通用（sortColumn 传空则不排序，因不同报告排序字段不同）
