@@ -69,6 +69,17 @@ td.num{text-align:right;font-variant-numeric:tabular-nums}
 .flag.bad{background:#2d1517;border:1px solid #5c1d1f}
 .flag.good{background:#0d2a1a;border:1px solid #1f5c33}
 .flag .lbl{font-weight:600}
+/* 展开（十问 / 红旗） */
+details summary{cursor:pointer;list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary::after{content:' ▸';color:var(--dim)}
+details[open] summary::after{content:' ▾'}
+.q-summary{display:flex;flex-direction:column;gap:2px}
+.q-brief{color:var(--dim);font-size:12px}
+.q-detail{margin-top:6px;padding:8px 10px;background:var(--card2);border-radius:6px}
+.q-desc{font-size:12px;color:var(--txt);margin-bottom:4px}
+.flag-explain{margin-top:6px;font-size:12px;color:var(--dim)}
+.flag summary{font-size:13px}
 /* 赛道 */
 .board-tags{display:flex;flex-wrap:wrap;gap:6px}
 .board-tag{font-size:12px;padding:4px 12px;border-radius:14px;background:var(--card2);border:1px solid var(--border)}
@@ -355,7 +366,7 @@ function matchBoard(bn, boardQuotes){
 
 // 股东增减持明细（含变动均价 TRADE_AVERAGE_PRICE，用于估算平均成本）
 async function fetchHolderChange(code){
-  const url = 'https://datacenter-web.eastmoney.com/api/data/v1/get?sortColumns=END_DATE,SECURITY_CODE&sortTypes=-1,-1&pageSize=50&pageNumber=1&reportName=RPT_SHARE_HOLDER_INCREASE&columns=ALL&source=WEB&client=WEB&filter=(SECURITY_CODE%3D%22'+code+'%22)';
+  const url = 'https://datacenter-web.eastmoney.com/api/data/v1/get?sortColumns=END_DATE,SECURITY_CODE&sortTypes=-1,-1&pageSize=500&pageNumber=1&reportName=RPT_SHARE_HOLDER_INCREASE&columns=ALL&source=WEB&client=WEB&filter=(SECURITY_CODE%3D%22'+code+'%22)';
   const r = await fetch(url, {referrerPolicy:'no-referrer'});
   const d = await r.json();
   return (d.result && d.result.data) || [];
@@ -627,17 +638,39 @@ function renderChecklist(data){
     return `<div class="q-item">
       <div class="q-mark ${markCls}">${mark}</div>
       <div class="q-body">
-        <div class="q-title">${c.q}. ${c.title}</div>
-        <div class="q-basis">${c.basis}</div>
+        <details class="q-details">
+          <summary class="q-summary">
+            <span class="q-title">${c.q}. ${c.title}</span>
+            <span class="q-brief">${c.basis}</span>
+          </summary>
+          <div class="q-detail">
+            <div class="q-desc">📌 判断标准：${c.desc}</div>
+            <div class="q-basis">📊 依据：${c.basis}</div>
+          </div>
+        </details>
       </div>
     </div>`;
   }).join('');
   $('checklist').innerHTML = html;
 }
 
+const flagExplain = {
+  '现金流背离': '经营现金流远低于净利润，说明利润是"纸面利润"没变成真金白银。判断标准：现金流/净利 <50% 或现金流为负。',
+  '存货堆积': '存货激增可能滞销或囤货，占用资金。判断标准：存货较4期前增长 >50%。',
+  '应收激增': '应收账款激增说明营收靠赊账，回款风险高。判断标准：应收较4期前增长 >50%。',
+  '非经常损益': '利润主要靠卖资产/政府补助等一次性收益，主营不赚钱。判断标准：非经常损益占净利 >30%，或亏损股靠非经常收益减亏。',
+  '债务杠杆': '资产负债率过高，偿债压力大、财务风险高。判断标准：资产负债率 >70%。',
+  '大股东质押': '大股东质押比例过高，可能资金链紧张，平仓会冲击股价。判断标准：质押比例 >60%。',
+};
+
 function renderFlags(data){
   const flags = runFlags(data);
-  const html = flags.map(f=>`<div class="flag ${f.bad?'bad':'good'}"><span class="lbl">${f.bad?'⚠️':'✅'} ${f.lbl}：</span>${f.txt}</div>`).join('');
+  const html = flags.map(f=>`<div class="flag ${f.bad?'bad':'good'}">
+    <details>
+      <summary><span class="lbl">${f.bad?'⚠️':'✅'} ${f.lbl}：</span>${f.txt}</summary>
+      <div class="flag-explain">${flagExplain[f.lbl]||''}</div>
+    </details>
+  </div>`).join('');
   $('flags').innerHTML = html;
 }
 
@@ -825,8 +858,8 @@ function drawKline(canvas, klines){
   klines.forEach((k,i)=>{
     const x = pad.l + i*cw + cw/2;
     const up = k.close>=k.open;
-    ctx.strokeStyle = up ? '#f85149' : '#3fb950';
-    ctx.fillStyle = up ? '#f85149' : '#3fb950';
+    ctx.strokeStyle = up ? '#ff4d4f' : '#00c48c';
+    ctx.fillStyle = up ? '#ff4d4f' : '#00c48c';
     ctx.beginPath(); ctx.moveTo(x,y(k.high)); ctx.lineTo(x,y(k.low)); ctx.stroke();
     const yo = y(k.open), yc = y(k.close);
     const top = Math.min(yo,yc), bh = Math.max(Math.abs(yo-yc),1);
