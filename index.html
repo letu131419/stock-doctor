@@ -115,6 +115,23 @@ canvas{width:100%;height:auto;background:var(--card2);border-radius:6px}
   .board-tag{font-size:11px;padding:3px 10px}
   .note{font-size:11px}
 }
+/* 文字搜索 + 自选池 */
+.searchwrap{position:relative;flex:1;min-width:220px}
+.searchwrap input{width:100%}
+.suggest{position:absolute;top:42px;left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:8px;max-height:320px;overflow-y:auto;z-index:50;box-shadow:0 6px 20px rgba(0,0,0,.5)}
+.suggest-item{padding:9px 12px;cursor:pointer;font-size:14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
+.suggest-item:last-child{border-bottom:none}
+.suggest-item:hover{background:var(--card2)}
+.suggest-item .s-name{font-weight:600}
+.suggest-item .s-code{color:var(--dim);font-size:12px}
+.suggest-empty{padding:10px 12px;color:var(--dim);font-size:13px}
+.watch-btn{background:var(--card2);color:var(--blue);border:1px solid var(--blue);padding:4px 12px;border-radius:14px;font-size:12px;cursor:pointer;font-weight:600;white-space:nowrap}
+.watch-btn.on{background:var(--blue);color:#fff}
+.watch-table .code{cursor:pointer;color:var(--blue)}
+.watch-table .code:hover{text-decoration:underline}
+.watch-remove{color:var(--red);cursor:pointer;font-size:12px;padding:2px 8px;border:1px solid var(--red);border-radius:4px;white-space:nowrap}
+.watch-remove:hover{background:#2d1517}
+.watch-empty{color:var(--dim);font-size:13px;padding:10px 0}
 /* 预启动 */
 .pool-table td{font-size:13px}
 .pool-table .code{cursor:pointer;color:var(--blue)}
@@ -127,7 +144,10 @@ canvas{width:100%;height:auto;background:var(--card2);border-radius:6px}
 <div class="sub">十问投资检查 · 财务造假红旗 · 赛道判断 · 预启动筛选（数据实时拉取 · 仅作研究参考，非投资建议）</div>
 
 <div class="toolbar">
-  <input type="text" id="codeInput" placeholder="输入 6 位股票代码，如 600519" maxlength="6" inputmode="numeric">
+  <div class="searchwrap">
+    <input type="text" id="codeInput" placeholder="输入名称 / 拼音 / 代码，如 茅台、gzmt、600519" autocomplete="off">
+    <div id="suggestBox" class="suggest hidden"></div>
+  </div>
   <button onclick="queryStock()">诊断</button>
   <select id="hotSelect" onchange="pickHot(this.value)">
     <option value="">热门股快选</option>
@@ -148,6 +168,7 @@ canvas{width:100%;height:auto;background:var(--card2);border-radius:6px}
 <div class="tabs">
   <div class="tab active" id="tabDiag" onclick="switchTab('diag')">单股诊断</div>
   <div class="tab" id="tabPool" onclick="switchTab('pool')">预启动筛选</div>
+  <div class="tab" id="tabWatch" onclick="switchTab('watch')">我的自选</div>
 </div>
 
 <div id="errBox" class="err hidden"></div>
@@ -210,6 +231,16 @@ canvas{width:100%;height:auto;background:var(--card2);border-radius:6px}
     <button onclick="scanPreLaunch()">开始扫描全市场</button>
     <div id="poolStatus" class="loading hidden"></div>
     <div id="poolResult"></div>
+  </div>
+</div>
+
+<!-- ============ 我的自选池 ============ -->
+<div id="watchView" class="hidden">
+  <div class="card">
+    <h2><span class="ic">⭐</span> 我的自选池</h2>
+    <div class="sub">仅保存在本浏览器（localStorage），换设备/浏览器不共享。点击代码看诊断，行情实时拉取。</div>
+    <button class="sec" onclick="renderWatch()">刷新行情</button>
+    <div id="watchList" style="margin-top:12px"></div>
   </div>
 </div>
 
@@ -590,6 +621,7 @@ function runFlags(data){
 /* ============ 渲染 ============ */
 function renderQuote(data){
   const q = data.quote;
+  const inW = inWatch(q.code);
   const cls = q.chgPct>=0?'up':'down';
   const sign = q.chgPct>=0?'+':'';
   // 异动标记
@@ -605,6 +637,7 @@ function renderQuote(data){
       <span class="q-name">${q.name}</span><span class="q-code">${q.code}</span>
       <span class="q-price">¥${fmtNum(q.price)}</span>
       <span class="q-chg ${cls}">${sign}${q.chgPct.toFixed(2)}%</span>
+      <button class="watch-btn${inW?' on':''}" id="watchBtn" data-code="${q.code}" data-name="${q.name}" onclick="onToggleWatch()">${inW?'★ 已加自选':'☆ 加入自选'}</button>
     </div>
     <div class="q-meta">
       <span>今开 <b>${fmtNum(q.open)}</b></span>
@@ -989,17 +1022,126 @@ function renderPool(results){
     <td class="num">${r.turnover!=null?r.turnover.toFixed(2)+'%':'—'}</td>
     <td class="num">${r.floatMv!=null?(r.floatMv/1e8).toFixed(1)+'亿':'—'}</td>
     <td class="num">+${r.dev.toFixed(1)}%</td>
+    <td><button class="watch-btn${inWatch(r.code)?' on':''}" onclick="onToggleWatchFromPool(this,'${r.code}','${r.name}')">${inWatch(r.code)?'★已加':'☆加自选'}</button></td>
   </tr>`).join('');
   $('poolResult').innerHTML = `
     <div class="chart-title">共 ${results.length} 只候选（按量比排序）</div>
-    <table class="pool-table"><thead><tr><th>代码</th><th>名称</th><th>涨幅</th><th>量比</th><th>换手</th><th>流通市值</th><th>距MA20</th></tr></thead><tbody>${rows}</tbody></table>
+    <table class="pool-table"><thead><tr><th>代码</th><th>名称</th><th>涨幅</th><th>量比</th><th>换手</th><th>流通市值</th><th>距MA20</th><th>自选</th></tr></thead><tbody>${rows}</tbody></table>
     <div class="note">点击代码查看单股诊断。距MA20=当前价相对20日均线偏离。</div>`;
 }
 
 function jumpTo(code){
   $('codeInput').value = code;
+  currentCode = code;
+  const url = new URL(location.href); url.searchParams.set('code', code); history.replaceState(null,'',url);
   switchTab('diag');
   loadStock(code);
+}
+
+/* ============ 文字搜索（腾讯 smartbox，脚本标签跨域）============ */
+function searchSmartbox(q){
+  return new Promise(resolve=>{
+    window.v_hint = '';
+    const s = document.createElement('script');
+    s.src = 'https://smartbox.gtimg.cn/s3/?v=2&q='+encodeURIComponent(q)+'&t=all&_='+Date.now();
+    s.onload = ()=>{ s.remove(); resolve(window.v_hint||''); };
+    s.onerror = ()=>{ s.remove(); resolve(''); };
+    document.head.appendChild(s);
+  });
+}
+function parseHint(hint){
+  if(!hint || hint==='N') return [];
+  return hint.split('^').map(seg=>{
+    const p = seg.split('~');
+    return {mkt:p[0], code:p[1], name:p[2], py:p[3], type:p[4]};
+  }).filter(x=>x.type==='GP-A' && ['sh','sz','bj'].includes(x.mkt));
+}
+let suggestTimer = null;
+function onSearchInput(){
+  clearTimeout(suggestTimer);
+  const v = $('codeInput').value.trim();
+  if(!v){ hideSuggest(); return; }
+  if(isValidCode(v)){ hideSuggest(); return; }
+  suggestTimer = setTimeout(async ()=>{
+    const list = parseHint(await searchSmartbox(v));
+    renderSuggest(list, v);
+  }, 250);
+}
+function renderSuggest(list, kw){
+  const box = $('suggestBox');
+  if(!list.length){ box.innerHTML = '<div class="suggest-empty">未找到沪深 A 股「'+kw+'」，可尝试输入 6 位代码</div>'; box.classList.remove('hidden'); return; }
+  box.innerHTML = list.map(x=>`<div class="suggest-item" onmousedown="pickSuggest('${x.code}')">
+    <span class="s-name">${x.name}</span><span class="s-code">${x.code} · ${x.mkt.toUpperCase()}</span>
+  </div>`).join('');
+  box.classList.remove('hidden');
+}
+function hideSuggest(){ $('suggestBox').classList.add('hidden'); $('suggestBox').innerHTML=''; }
+function pickSuggest(code){
+  hideSuggest();
+  $('codeInput').value = code;
+  currentCode = code;
+  const url = new URL(location.href); url.searchParams.set('code', code); history.replaceState(null,'',url);
+  loadStock(code);
+}
+
+/* ============ 我的自选池（localStorage）============ */
+const WATCH_KEY = 'sd_watchlist_v1';
+function getWatch(){ try{ const a=JSON.parse(localStorage.getItem(WATCH_KEY)||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
+function saveWatch(l){ localStorage.setItem(WATCH_KEY, JSON.stringify(l)); }
+function inWatch(code){ return getWatch().some(w=>String(w.code)===String(code)); }
+function toggleWatch(code, name){
+  const l = getWatch();
+  if(l.some(w=>String(w.code)===String(code))){ saveWatch(l.filter(w=>String(w.code)!==String(code))); return false; }
+  l.unshift({code:String(code), name:name||'', addedAt:Date.now()});
+  saveWatch(l);
+  return true;
+}
+function onToggleWatch(){
+  const b = $('watchBtn');
+  const added = toggleWatch(b.dataset.code, b.dataset.name);
+  b.textContent = added ? '★ 已加自选' : '☆ 加入自选';
+  b.classList.toggle('on', added);
+}
+function onToggleWatchFromPool(btn, code, name){
+  const added = toggleWatch(code, name);
+  btn.textContent = added ? '★已加' : '☆加自选';
+  btn.classList.toggle('on', added);
+}
+async function renderWatch(){
+  const list = getWatch();
+  const el = $('watchList');
+  if(!list.length){ el.innerHTML='<div class="watch-empty">自选池为空。在「单股诊断」页点「☆ 加入自选」，或在「预启动筛选」结果里点「☆加自选」即可收藏。</div>'; return; }
+  let quotes = {};
+  try{
+    const tickers = list.map(w=>toTicker(w.code)).join(',');
+    const raw = await fetchGBK('https://qt.gtimg.cn/q='+tickers);
+    raw.trim().split(';').filter(Boolean).forEach(line=>{
+      const m = line.match(/v_(\w+)="([^"]*)"/);
+      if(!m) return;
+      const p = m[2].split('~');
+      quotes[p[2]] = { name:p[1], price:parseFloat(p[3]), chgPct:parseFloat(p[32]) };
+    });
+  }catch(e){}
+  const rows = list.map(w=>{
+    const q = quotes[w.code];
+    const price = q ? fmtNum(q.price) : '—';
+    const chg = q && !isNaN(q.chgPct) ? (q.chgPct>0?'+':'')+q.chgPct.toFixed(2)+'%' : '—';
+    const cls = q && q.chgPct>=0 ? 'up' : 'down';
+    const nm = (q && q.name) || w.name || '';
+    return `<tr>
+      <td class="code" onclick="jumpTo('${w.code}')">${w.code}</td>
+      <td>${nm}</td>
+      <td class="num">${price}</td>
+      <td class="num ${cls}">${chg}</td>
+      <td><span class="watch-remove" onclick="removeWatch('${w.code}')">移除</span></td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<table class="watch-table"><thead><tr><th>代码</th><th>名称</th><th>现价</th><th>涨跌</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+  <div class="note">共 ${list.length} 只 · 行情实时拉取 · 仅本地保存</div>`;
+}
+function removeWatch(code){
+  toggleWatch(code);
+  renderWatch();
 }
 
 /* ============ 主流程 ============ */
@@ -1009,12 +1151,19 @@ function showErr(msg){ const e=$('errBox'); e.textContent=msg; e.classList.remov
 function hideErr(){ $('errBox').classList.add('hidden'); }
 
 async function queryStock(){
-  const code = $('codeInput').value.trim();
-  if(!isValidCode(code)){ showErr('请输入 6 位数字股票代码'); return; }
-  hideErr();
-  currentCode = code;
-  const url = new URL(location.href); url.searchParams.set('code', code); history.replaceState(null,'',url);
-  await loadStock(code);
+  const v = $('codeInput').value.trim();
+  if(!v){ showErr('请输入股票名称、拼音或代码'); return; }
+  hideErr(); hideSuggest();
+  if(isValidCode(v)){
+    currentCode = v;
+    const url = new URL(location.href); url.searchParams.set('code', v); history.replaceState(null,'',url);
+    await loadStock(v);
+    return;
+  }
+  const list = parseHint(await searchSmartbox(v));
+  if(list.length===1){ pickSuggest(list[0].code); return; }
+  if(list.length>1){ renderSuggest(list, v); showErr('找到 '+list.length+' 只匹配，请从下拉选择'); return; }
+  showErr('未找到「'+v+'」对应的沪深 A 股，请检查名称/拼音，或直接输入 6 位代码');
 }
 
 async function loadStock(code){
@@ -1087,12 +1236,20 @@ function renderVerdict(data){
 function pickHot(v){ if(v){ $('codeInput').value=v; queryStock(); } }
 function refresh(){ if(currentCode) loadStock(currentCode); }
 function switchTab(t){
-  if(t==='diag'){ $('diagView').classList.remove('hidden'); $('poolView').classList.add('hidden'); $('tabDiag').classList.add('active'); $('tabPool').classList.remove('active'); }
-  else { $('diagView').classList.add('hidden'); $('poolView').classList.remove('hidden'); $('tabDiag').classList.remove('active'); $('tabPool').classList.add('active'); }
+  const map = {diag:['diagView','tabDiag'], pool:['poolView','tabPool'], watch:['watchView','tabWatch']};
+  Object.keys(map).forEach(k=>{
+    const on = k===t;
+    $(map[k][0]).classList.toggle('hidden', !on);
+    $(map[k][1]).classList.toggle('active', on);
+  });
+  if(t==='watch') renderWatch();
 }
 
-/* 回车触发 */
+/* 输入事件 */
 $('codeInput').addEventListener('keydown', e=>{ if(e.key==='Enter') queryStock(); });
+$('codeInput').addEventListener('input', onSearchInput);
+$('codeInput').addEventListener('blur', ()=> setTimeout(hideSuggest, 150));
+document.addEventListener('click', e=>{ if(!e.target.closest('.searchwrap')) hideSuggest(); });
 
 /* URL 参数自动加载 */
 (function(){
