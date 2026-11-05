@@ -553,8 +553,9 @@ function runFlags(data){
     if(lastFin&&lastFin.PARENTNETPROFIT!=null&&lastFin.KCFJCXSYJLR!=null&&lastFin.PARENTNETPROFIT!==0){
       const np=lastFin.PARENTNETPROFIT, kcfj=lastFin.KCFJCXSYJLR;
       const nonRecur = np-kcfj;
-      const ratio = nonRecur/np*100;
-      flags.push({lbl:'非经常损益', bad: ratio>30, txt:`非经常损益 ${fmtYi(nonRecur)}，占净利 ${fmtNum(ratio,1)}%`});
+      const ratio = np>0 ? nonRecur/np*100 : null;
+      const bad = np>0 ? ratio>30 : nonRecur>0;  // 亏损股：非经常收益为正(靠非经常减亏)也是红旗
+      flags.push({lbl:'非经常损益', bad, txt:`非经常损益 ${fmtYi(nonRecur)}，占净利 ${ratio!=null?fmtNum(ratio,1)+'%':'—'}`});
     } else flags.push({lbl:'非经常损益', bad:false, txt:'数据不足'});
   }
   // 5 杠杆（资产负债率）
